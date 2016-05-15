@@ -120,7 +120,7 @@ public class DragController {
     /**
      * Interface to receive notifications when a drag starts or stops
      */
-    interface DragListener {
+    public interface DragListener {
         /**
          * A drag has begun
          *
