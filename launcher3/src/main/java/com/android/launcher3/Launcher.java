@@ -106,6 +106,11 @@ import com.android.launcher3.compat.PackageInstallerCompat;
 import com.android.launcher3.compat.PackageInstallerCompat.PackageInstallInfo;
 import com.android.launcher3.compat.UserHandleCompat;
 import com.android.launcher3.compat.UserManagerCompat;
+import com.android.launcher3.util.Logger;
+import com.android.launcher3.view.BaseUnitView;
+import com.android.launcher3.view.ParkViewHost;
+import com.android.launcher3.view.PetPigInfo;
+import com.android.launcher3.view.PetView;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -135,6 +140,7 @@ public class Launcher extends Activity
                    View.OnTouchListener, PageSwitchListener, LauncherProviderChangeListener {
     static final String TAG = "Launcher";
     static final boolean LOGD = false;
+    private static final String LOG_TAG = Logger.getLogTag(Launcher.class);
 
     static final boolean PROFILE_STARTUP = false;
     static final boolean DEBUG_WIDGETS = false;
@@ -977,6 +983,8 @@ public class Launcher extends Activity
             Log.v(TAG, "Launcher.onResume()");
         }
 
+        Logger.d(LOG_TAG, "Launcher.onResume()");
+
         if (mLauncherCallbacks != null) {
             mLauncherCallbacks.preOnResume();
         }
@@ -1357,6 +1365,7 @@ public class Launcher extends Activity
         mDragLayer = (DragLayer) findViewById(R.id.drag_layer);
         mWorkspace = (Workspace) mDragLayer.findViewById(R.id.workspace);
         mWorkspace.setPageSwitchListener(this);
+        mParkViewHost = (ParkViewHost) findViewById(R.id.parkviewhost);
         mPageIndicators = mDragLayer.findViewById(R.id.page_indicator);
 
         mLauncherView.setSystemUiVisibility(
@@ -1418,6 +1427,14 @@ public class Launcher extends Activity
         mWorkspace.setOnLongClickListener(this);
         mWorkspace.setup(dragController);
         dragController.addDragListener(mWorkspace);
+
+        //setup ParkViewHost
+        if (mParkViewHost != null) {
+            mParkViewHost.setHapticFeedbackEnabled(false);
+            mParkViewHost.setCustomizedOnLongClickListener(this);
+            mParkViewHost.setup(dragController);
+            dragController.addDragListener(mParkViewHost);
+        }
 
         // Get the search/delete bar
         mSearchDropTargetBar = (SearchDropTargetBar)
@@ -4530,6 +4547,13 @@ public class Launcher extends Activity
             mWorkspace.getUniqueComponents(true, null);
             mIntentsOnWorkspaceFromUpgradePath = mWorkspace.getUniqueComponents(true, null);
         }
+
+        if (mParkViewHost != null) {
+            PetView petView = new PetView(this);
+            PetPigInfo pigInfo = new PetPigInfo(this);
+            mParkViewHost.addInScreen(petView, pigInfo, 500, 500);
+        }
+
         PackageInstallerCompat.getInstance(this).onFinishBind();
 
         if (mLauncherCallbacks != null) {
@@ -5171,6 +5195,8 @@ public class Launcher extends Activity
             }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Void) null);
         }
     }
+
+    private ParkViewHost mParkViewHost;
 }
 
 interface LauncherTransitionable {

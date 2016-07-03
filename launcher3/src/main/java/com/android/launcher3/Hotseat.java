@@ -16,12 +16,15 @@
 
 package com.android.launcher3;
 
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.TransitionDrawable;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -29,6 +32,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.TextView;
+
+import com.android.launcher3.util.Logger;
 
 import java.util.ArrayList;
 
@@ -148,10 +153,10 @@ public class Hotseat extends FrameLayout {
             LayoutInflater inflater = LayoutInflater.from(context);
             TextView allAppsButton = (TextView)
                     inflater.inflate(R.layout.all_apps_button, mContent, false);
-            Drawable d = context.getResources().getDrawable(R.drawable.all_apps_button_icon);
 
-            Utilities.resizeIconDrawable(d);
-            allAppsButton.setCompoundDrawables(null, d, null, null);
+            prepareAllAppsButtonAsset(context);
+
+            allAppsButton.setCompoundDrawables(null, mAllAppsDrawable, null, null);
 
             allAppsButton.setContentDescription(context.getString(R.string.all_apps_button_label));
             allAppsButton.setOnKeyListener(new HotseatIconKeyEventListener());
@@ -160,6 +165,7 @@ public class Hotseat extends FrameLayout {
                 mLauncher.setAllAppsButton(allAppsButton);
                 allAppsButton.setOnClickListener(mLauncher);
                 allAppsButton.setOnFocusChangeListener(mLauncher.mFocusHandler);
+                mAllAppsButtonAnimator = new AllAppsButtonAnimator(allAppsButton);
             }
 
             // Note: We do this to ensure that the hotseat is always laid out in the orientation of
@@ -230,6 +236,92 @@ public class Hotseat extends FrameLayout {
                 ShortcutInfo si = a.makeShortcut();
                 info.add(si);
             }
+        }
+    }
+
+    private Drawable mBoxDrawable;
+    private Drawable mAllAppsDrawable;
+
+    private void prepareAllAppsButtonAsset(Context context) {
+        mBoxDrawable = context.getResources().getDrawable(R.drawable.ic_setting);
+        Utilities.resizeIconDrawable(mBoxDrawable);
+
+        mAllAppsDrawable = context.getResources().getDrawable(R.drawable.all_apps_button_icon);
+        Utilities.resizeIconDrawable(mAllAppsDrawable);
+    }
+
+    public void onDragStart(final DragSource source, Object info, int dragAction) {
+        View allappsbutton = mLauncher.getAllAppsButton();
+        if (allappsbutton instanceof TextView) {
+            Logger.d(TAG, "hotseat onDragStart");
+
+
+            ((TextView) allappsbutton).setCompoundDrawables(null, mBoxDrawable, null, null);
+        }
+    }
+
+    public void onDragEnd() {
+        View allappsbutton = mLauncher.getAllAppsButton();
+        if (allappsbutton instanceof TextView) {
+            Logger.d(TAG, "hotseat onDragEnd");
+//            TransitionDrawable td = (TransitionDrawable)((TextView) allappsbutton).getCompoundDrawables()[1];
+//            td.resetTransition();
+            ((TextView) allappsbutton).setCompoundDrawables(null, mAllAppsDrawable, null, null);
+        }
+    }
+
+    public void onDragEnterAllAppsButton() {
+        if (mAllAppsButtonAnimator != null)
+            mAllAppsButtonAnimator.startAccept();
+    }
+
+    public void onDragExitAllAppsButton() {
+        if (mAllAppsButtonAnimator != null)
+            mAllAppsButtonAnimator.startNeutral();
+    }
+
+    private AllAppsButtonAnimator mAllAppsButtonAnimator;
+
+    private class AllAppsButtonAnimator {
+        private static final int mDurationOfAccept = 500;
+        private static final int mDurationOfNeutral = 500;
+        private AnimatorSet mAcceptAnimator;
+        private AnimatorSet mNeutralAnimator;
+
+        AllAppsButtonAnimator(View allappsButton) {
+            ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(allappsButton, "scaleX", 1.5f);
+            ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(allappsButton, "scaleY", 1.5f);
+            scaleUpX.setDuration(mDurationOfAccept);
+            scaleUpY.setDuration(mDurationOfAccept);
+            mAcceptAnimator = new AnimatorSet();
+            mAcceptAnimator.play(scaleUpX).with(scaleUpY);
+
+
+            ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(allappsButton, "scaleX", allappsButton.getScaleX());
+            ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(allappsButton, "scaleY", allappsButton.getScaleY());
+            scaleDownX.setDuration(mDurationOfNeutral);
+            scaleDownY.setDuration(mDurationOfNeutral);
+            mNeutralAnimator = new AnimatorSet();
+            mNeutralAnimator.play(scaleDownX).with(scaleDownY);
+
+        }
+
+        public void startAccept() {
+            Logger.d(TAG, "hotseat startAccept");
+            if (mNeutralAnimator.isRunning())
+                mNeutralAnimator.cancel();
+
+            if (!mAcceptAnimator.isRunning())
+                mAcceptAnimator.start();
+        }
+
+        public void startNeutral() {
+            Logger.d(TAG, "hotseat startNeutral");
+            if (mAcceptAnimator.isRunning())
+                mAcceptAnimator.cancel();
+
+            if (!mNeutralAnimator.isRunning())
+                mNeutralAnimator.start();
         }
     }
 }

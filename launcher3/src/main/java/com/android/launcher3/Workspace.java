@@ -263,6 +263,8 @@ public class Workspace extends SmoothPagedView
     private static final int DRAG_MODE_CREATE_FOLDER = 1;
     private static final int DRAG_MODE_ADD_TO_FOLDER = 2;
     private static final int DRAG_MODE_REORDER = 3;
+    private static final int DRAG_MODE_OVER_ALLAPPS_BUTTON = 4;
+
     private int mDragMode = DRAG_MODE_NONE;
     private int mLastReorderX = -1;
     private int mLastReorderY = -1;
@@ -412,6 +414,8 @@ public class Workspace extends SmoothPagedView
         // Prevent any Un/InstallShortcutReceivers from updating the db while we are dragging
         InstallShortcutReceiver.enableInstallQueue();
         UninstallShortcutReceiver.enableUninstallQueue();
+        Hotseat hotseat = mLauncher.getHotseat();
+        hotseat.onDragStart(source, info, dragAction);
         post(new Runnable() {
             @Override
             public void run() {
@@ -440,6 +444,9 @@ public class Workspace extends SmoothPagedView
         // Re-enable any Un/InstallShortcutReceiver and now process any queued items
         InstallShortcutReceiver.disableAndFlushInstallQueue(getContext());
         UninstallShortcutReceiver.disableAndFlushUninstallQueue(getContext());
+
+        Hotseat hotseat = mLauncher.getHotseat();
+        hotseat.onDragEnd();
 
         mDragSourceInternal = null;
         mLauncher.onInteractionEnd();
@@ -2735,7 +2742,7 @@ public class Workspace extends SmoothPagedView
         float scale = mLauncher.getDragLayer().getLocationInDragLayer(child, mTempXY);
         int dragLayerX = Math.round(mTempXY[0] - (bmpWidth - scale * child.getWidth()) / 2);
         int dragLayerY = Math.round(mTempXY[1] - (bmpHeight - scale * bmpHeight) / 2
-                        - padding.get() / 2);
+                - padding.get() / 2);
 
         LauncherAppState app = LauncherAppState.getInstance();
         DeviceProfile grid = app.getDynamicGrid().getDeviceProfile();
@@ -3370,11 +3377,14 @@ public class Workspace extends SmoothPagedView
         mLauncher.getDragLayer().hidePageHints();
     }
 
+    private boolean mIsDragOverAllAppsButton = false;
+
     void setCurrentDropLayout(CellLayout layout) {
         if (mDragTargetLayout != null) {
             mDragTargetLayout.revertTempState();
             mDragTargetLayout.onDragExit();
         }
+
         mDragTargetLayout = layout;
         if (mDragTargetLayout != null) {
             mDragTargetLayout.onDragEnter();
@@ -3411,6 +3421,7 @@ public class Workspace extends SmoothPagedView
                 // as this feels to slow / unresponsive.
                 cleanupReorder(false);
                 cleanupFolderCreation();
+                clearDragOverAllappsButton();
             } else if (dragMode == DRAG_MODE_ADD_TO_FOLDER) {
                 cleanupReorder(true);
                 cleanupFolderCreation();
@@ -3420,7 +3431,12 @@ public class Workspace extends SmoothPagedView
             } else if (dragMode == DRAG_MODE_REORDER) {
                 cleanupAddToFolder();
                 cleanupFolderCreation();
+            } else if (dragMode == DRAG_MODE_OVER_ALLAPPS_BUTTON) {
+                cleanupAddToFolder();
+                cleanupReorder(true);
+                cleanupFolderCreation();
             }
+
             mDragMode = dragMode;
         }
     }
@@ -3699,11 +3715,13 @@ public class Workspace extends SmoothPagedView
             final View dragOverView = mDragTargetLayout.getChildAt(mTargetCell[0],
                     mTargetCell[1]);
 
+            manageDragOverAllAppsButton(mDragTargetLayout, dragOverView);
+
             manageFolderFeedback(info, mDragTargetLayout, mTargetCell,
                     targetCellDistance, dragOverView);
 
             boolean nearestDropOccupied = mDragTargetLayout.isNearestDropLocationOccupied((int)
-                    mDragViewVisualCenter[0], (int) mDragViewVisualCenter[1], item.spanX,
+                            mDragViewVisualCenter[0], (int) mDragViewVisualCenter[1], item.spanX,
                     item.spanY, child, mTargetCell);
 
             if (!nearestDropOccupied) {
@@ -3735,6 +3753,21 @@ public class Workspace extends SmoothPagedView
                 }
             }
         }
+    }
+
+    private void manageDragOverAllAppsButton(CellLayout targetLayout, View dragOverView) {
+        if (!mIsDragOverAllAppsButton && mLauncher.isHotseatLayout(targetLayout) && dragOverView == mLauncher.getAllAppsButton()) {
+            mLauncher.getHotseat().onDragEnterAllAppsButton();
+            mIsDragOverAllAppsButton = true;
+            setDragMode(DRAG_MODE_OVER_ALLAPPS_BUTTON);
+        } else if (mIsDragOverAllAppsButton && (!mLauncher.isHotseatLayout(targetLayout) || dragOverView != mLauncher.getAllAppsButton())) {
+            clearDragOverAllappsButton();
+        }
+    }
+
+    private void clearDragOverAllappsButton() {
+        mLauncher.getHotseat().onDragExitAllAppsButton();
+        mIsDragOverAllAppsButton = false;
     }
 
     private void manageFolderFeedback(ItemInfo info, CellLayout targetLayout,

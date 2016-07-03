@@ -12,14 +12,18 @@ import com.android.launcher3.DragController;
 import com.android.launcher3.DragSource;
 import com.android.launcher3.DropTarget;
 import com.android.launcher3.Insettable;
+import com.android.launcher3.SpringLoadedDragController;
+import com.android.launcher3.util.Logger;
 
 /**
  * Created by NineG on 2016/5/15.
  */
 public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, View.OnTouchListener,
         DragController.DragListener, ViewGroup.OnHierarchyChangeListener, Insettable {
+    private static final String LOG_TAG = Logger.getLogTag(ParkViewHost.class);
 
     protected final Rect mInsets = new Rect();
+    private DragController mDragController;
 
     public ParkViewHost(Context context) {
         this(context, null);
@@ -63,7 +67,7 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
                 ParkViewHost.LayoutParams lp = (ParkViewHost.LayoutParams) child.getLayoutParams();
                 int childLeft = lp.x;
                 int childTop = lp.y;
-                child.layout(childLeft, childTop, childLeft + lp.width, childTop + lp.height);
+                child.layout(childLeft, childTop, childLeft + child.getMeasuredWidth(), childTop + child.getMeasuredHeight());
             }
         }
     }
@@ -81,6 +85,7 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
     /**
      * Handle LayoutParams ++
      * */
+
     @Override
     public LayoutParams generateLayoutParams(AttributeSet attrs) {
         return new LayoutParams(getContext(), attrs);
@@ -315,11 +320,12 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
     @Override
     public void onChildViewAdded(View parent, View child) {
         if (!(child instanceof BaseUnitView)) {
-            throw new IllegalArgumentException("A Workspace can only have CellLayout children.");
+            throw new IllegalArgumentException("A ParkViewHost can only have BaseUnitView children.");
         }
         BaseUnitView cl = ((BaseUnitView) child);
         cl.setOnInterceptTouchListener(this);
         cl.setClickable(true);
+        mUnitManager.addUnit(cl.getUnitInfo());
     }
 
     /**
@@ -330,7 +336,12 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
      */
     @Override
     public void onChildViewRemoved(View parent, View child) {
+        if (!(child instanceof BaseUnitView)) {
+            throw new IllegalArgumentException("A ParkViewHost can only have BaseUnitView children.");
+        }
 
+        BaseUnitView cl = ((BaseUnitView) child);
+        mUnitManager.remove(cl.getUnitInfo());
     }
 
     /**
@@ -347,4 +358,40 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         return false;
     }
 
+    public void setup(DragController dragController) {
+        mDragController = dragController;
+    }
+
+    private OnLongClickListener mOnLongClickListener = null;
+
+    public void setCustomizedOnLongClickListener(OnLongClickListener l) {
+        mOnLongClickListener = l;
+    }
+
+    public boolean addInScreen(BaseUnitView child, BaseUnitInfo info, int x, int y) {
+        LayoutParams params = generateDefaultLayoutParams();
+        params.x = x;
+        params.y = y;
+        child.setLayoutParams(params);
+        child.setUnitInfo(info);
+        child.setOnLongClickListener(mOnLongClickListener);
+        addView(child);
+        return true;
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        boolean result = super.onInterceptTouchEvent(ev);
+        Logger.d(LOG_TAG, "onInterceptTouEvent this %s, %b", this, result);
+        return result;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        boolean result = super.onTouchEvent(event);
+        Logger.d(LOG_TAG, "onTouchEvent this %s, %b", this, result);
+        return result;
+    }
+
+    private UnitManager mUnitManager = new UnitManager();
 }
