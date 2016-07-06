@@ -72,6 +72,7 @@ import com.android.launcher3.LauncherSettings.Favorites;
 import com.android.launcher3.compat.PackageInstallerCompat;
 import com.android.launcher3.compat.PackageInstallerCompat.PackageInstallInfo;
 import com.android.launcher3.compat.UserHandleCompat;
+import com.android.launcher3.util.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -90,7 +91,7 @@ public class Workspace extends SmoothPagedView
         implements DropTarget, DragSource, DragScroller, View.OnTouchListener,
         DragController.DragListener, LauncherTransitionable, ViewGroup.OnHierarchyChangeListener,
         Insettable {
-    private static final String TAG = "Launcher.Workspace";
+    private static final String TAG = Logger.getLogTag(Workspace.class);
 
     // Y rotation to apply to the workspace screens
     private static final float WORKSPACE_OVERSCROLL_ROTATION = 24f;
@@ -2917,17 +2918,18 @@ public class Workspace extends SmoothPagedView
 
             // Don't accept the drop if there's no room for the item
             if (!foundCell) {
-                // Don't show the message if we are dropping on the AllApps button and the hotseat
+                // acceptDrop if we are dropping on the AllApps button and the hotseat
                 // is full
                 boolean isHotseat = mLauncher.isHotseatLayout(dropTargetLayout);
                 if (mTargetCell != null && isHotseat) {
                     Hotseat hotseat = mLauncher.getHotseat();
                     if (hotseat.isAllAppsButtonRank(
-                            hotseat.getOrderInHotseat(mTargetCell[0], mTargetCell[1]))) {
-                        return false;
+                            hotseat.getOrderInHotseat(mTargetCell[0], mTargetCell[1])) && hotseat.acceptDropIntoCannon((ItemInfo) d.dragInfo)) {
+                        Logger.d(TAG, "acceptDrop %b hotseat target cell (%s, %s) %s", true, mTargetCell[0], mTargetCell[1], d.dragInfo);
+                        return true;
                     }
                 }
-
+                Logger.d(TAG, "acceptDrop %b target cell (%s, %s)", false, mTargetCell[0], mTargetCell[1]);
                 mLauncher.showOutOfSpaceMessage(isHotseat);
                 return false;
             }
@@ -2938,6 +2940,7 @@ public class Workspace extends SmoothPagedView
             commitExtraEmptyScreen();
         }
 
+        Logger.d(TAG, "acceptDrop %b target cell (%s, %s)", true, mTargetCell[0], mTargetCell[1]);
         return true;
     }
 
@@ -3133,6 +3136,37 @@ public class Workspace extends SmoothPagedView
                     minSpanY = item.minSpanY;
                 }
 
+                int[] targetCellForCannon = findNearestArea((int) mDragViewVisualCenter[0],
+                        (int) mDragViewVisualCenter[1], minSpanX, minSpanY, dropTargetLayout,
+                        mTargetCell);
+
+
+                if (targetCellForCannon != null && hasMovedIntoHotseat) {
+                    Hotseat hotseat = mLauncher.getHotseat();
+                    if (hotseat.isAllAppsButtonRank(hotseat.getOrderInHotseat(targetCellForCannon[0], targetCellForCannon[1])) && hotseat.acceptDropIntoCannon((ItemInfo) d.dragInfo)) {
+                        CellLayout layout = (CellLayout) cell.getParent().getParent();
+                        layout.markCellsAsOccupiedForView(cell);
+                        cell.setAlpha(0f);
+                        cell.setScaleX(0f);
+                        cell.setScaleY(0f);
+                        cell.setVisibility(View.VISIBLE);
+
+                        Runnable actionAfterFireAnimation = new Runnable() {
+                            @Override
+                            public void run() {
+                                // If we can't find a drop location, we return the item to its original position
+//                                CellLayout.LayoutParams lp = (CellLayout.LayoutParams) cell.getLayoutParams();
+//                                mTargetCell[0] = lp.cellX;
+//                                mTargetCell[1] = lp.cellY;
+                                ValueAnimator animator = mLauncher.createNewAppBounceAnimation(cell, 0);
+                                animator.start();
+                            }
+                        };
+                        hotseat.dropIntoCannon(d, actionAfterFireAnimation);
+                        return;
+                    }
+                }
+
                 int[] resultSpan = new int[2];
                 mTargetCell = dropTargetLayout.performReorder((int) mDragViewVisualCenter[0],
                         (int) mDragViewVisualCenter[1], minSpanX, minSpanY, spanX, spanY, cell,
@@ -3155,6 +3189,7 @@ public class Workspace extends SmoothPagedView
                     snapScreen = getPageIndexForScreenId(screenId);
                     snapToPage(snapScreen);
                 }
+
 
                 if (foundCell) {
                     final ItemInfo info = (ItemInfo) cell.getTag();
@@ -3233,6 +3268,7 @@ public class Workspace extends SmoothPagedView
                 }
             };
             mAnimatingViewIntoPlace = true;
+
             if (d.dragView.hasDrawn()) {
                 final ItemInfo info = (ItemInfo) cell.getTag();
                 if (info.itemType == LauncherSettings.Favorites.ITEM_TYPE_APPWIDGET) {
@@ -3362,6 +3398,8 @@ public class Workspace extends SmoothPagedView
             mCreateUserFolderOnDrop = true;
         } else if (mDragMode == DRAG_MODE_ADD_TO_FOLDER) {
             mAddToExistingFolderOnDrop = true;
+        } else if (mDragMode == DRAG_MODE_OVER_ALLAPPS_BUTTON) {
+
         }
 
         // Reset the scroll area and previous drag target

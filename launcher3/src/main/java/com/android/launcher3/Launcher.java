@@ -4585,7 +4585,7 @@ public class Launcher extends Activity
         return diff > (NEW_APPS_ANIMATION_INACTIVE_TIMEOUT_SECONDS * 1000);
     }
 
-    private ValueAnimator createNewAppBounceAnimation(View v, int i) {
+    public ValueAnimator createNewAppBounceAnimation(View v, int i) {
         ValueAnimator bounceAnim = LauncherAnimUtils.ofPropertyValuesHolder(v,
                 PropertyValuesHolder.ofFloat("alpha", 1f),
                 PropertyValuesHolder.ofFloat("scaleX", 1f),

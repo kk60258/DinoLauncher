@@ -24,12 +24,13 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.TransitionDrawable;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
@@ -38,7 +39,7 @@ import com.android.launcher3.util.Logger;
 import java.util.ArrayList;
 
 public class Hotseat extends FrameLayout {
-    private static final String TAG = "Hotseat";
+    private static final String LOG_TAG = Logger.getLogTag(Hotseat.class);
 
     private CellLayout mContent;
 
@@ -212,7 +213,7 @@ public class Hotseat extends FrameLayout {
             for (AppInfo info: allApps) {
                 ComponentName cn = info.intent.getComponent();
                 if (!onWorkspace.contains(cn)) {
-                    Log.d(TAG, "Adding to 'more apps': " + info.intent);
+                    Log.d(LOG_TAG, "Adding to 'more apps': " + info.intent);
                     ShortcutInfo si = info.makeShortcut();
                     fi.add(si);
                 }
@@ -253,7 +254,7 @@ public class Hotseat extends FrameLayout {
     public void onDragStart(final DragSource source, Object info, int dragAction) {
         View allappsbutton = mLauncher.getAllAppsButton();
         if (allappsbutton instanceof TextView) {
-            Logger.d(TAG, "hotseat onDragStart");
+            Logger.d(LOG_TAG, "hotseat onDragStart");
 
 
             ((TextView) allappsbutton).setCompoundDrawables(null, mBoxDrawable, null, null);
@@ -263,7 +264,7 @@ public class Hotseat extends FrameLayout {
     public void onDragEnd() {
         View allappsbutton = mLauncher.getAllAppsButton();
         if (allappsbutton instanceof TextView) {
-            Logger.d(TAG, "hotseat onDragEnd");
+            Logger.d(LOG_TAG, "hotseat onDragEnd");
 //            TransitionDrawable td = (TransitionDrawable)((TextView) allappsbutton).getCompoundDrawables()[1];
 //            td.resetTransition();
             ((TextView) allappsbutton).setCompoundDrawables(null, mAllAppsDrawable, null, null);
@@ -307,7 +308,7 @@ public class Hotseat extends FrameLayout {
         }
 
         public void startAccept() {
-            Logger.d(TAG, "hotseat startAccept");
+            Logger.d(LOG_TAG, "hotseat startAccept");
             if (mNeutralAnimator.isRunning())
                 mNeutralAnimator.cancel();
 
@@ -316,7 +317,7 @@ public class Hotseat extends FrameLayout {
         }
 
         public void startNeutral() {
-            Logger.d(TAG, "hotseat startNeutral");
+            Logger.d(LOG_TAG, "hotseat startNeutral");
             if (mAcceptAnimator.isRunning())
                 mAcceptAnimator.cancel();
 
@@ -324,4 +325,70 @@ public class Hotseat extends FrameLayout {
                 mNeutralAnimator.start();
         }
     }
+
+
+    /***prepare accept drop animation**/
+    private void onDrop(DragView animateView, View targetView, float scaleRelativeToDragLayer, final ItemInfo itemInfo, final Runnable postAnimationRunnable, final Runnable actionAfterFireAnimation) {
+
+        // Typically, the animateView corresponds to the DragView; however, if this is being done
+        // after a configuration activity (ie. for a Shortcut being dragged from AllApps) we
+        // will not have a view to animate
+        if (animateView != null) {
+            DragLayer dragLayer = mLauncher.getDragLayer();
+            Rect from = new Rect();
+            dragLayer.getViewRectRelativeToSelf(animateView, from);
+            Rect to = new Rect();
+
+            Workspace workspace = mLauncher.getWorkspace();
+            // Set cellLayout and this to it's final state to compute final animation locations
+            workspace.setFinalTransitionTransform(getLayout());
+            float scaleX = getScaleX();
+            float scaleY = getScaleY();
+            setScaleX(1.0f);
+            setScaleY(1.0f);
+            scaleRelativeToDragLayer = dragLayer.getDescendantRectRelativeToSelf(targetView, to);
+            // Finished computing final animation locations, restore current state
+            setScaleX(scaleX);
+            setScaleY(scaleY);
+            workspace.resetTransitionTransform(getLayout());
+
+            //make sure the center of animatedview animate to the center of targetView
+            to.offset(to.width() / 2 - animateView.getMeasuredWidth() / 2, to.height() / 2 - animateView.getMeasuredHeight() / 2);
+
+            float finalAlpha = 0f;
+            float finalScale = 0f;
+            Runnable actionAfterDropInAnimation = new Runnable() {
+                @Override
+                public void run() {
+                    if (postAnimationRunnable != null)
+                        postAnimationRunnable.run();
+                    fireCannonBall(itemInfo, actionAfterFireAnimation);
+                }
+            };
+            dragLayer.animateView(animateView, from, to, finalAlpha,
+                    1, 1, finalScale, finalScale, DROP_IN_ANIMATION_DURATION,
+                    new DecelerateInterpolator(2), new AccelerateInterpolator(2),
+                    actionAfterDropInAnimation, DragLayer.ANIMATION_END_DISAPPEAR, null);
+        } else {
+            fireCannonBall(itemInfo, actionAfterFireAnimation);
+        }
+    }
+
+    private void fireCannonBall(ItemInfo itemInfo, final Runnable actionAfterFireAnimation) {
+        postDelayed(actionAfterFireAnimation, 1000);
+//        if (actionAfterFireAnimation != null)
+//            actionAfterFireAnimation.run();
+    }
+
+    private static final int DROP_IN_ANIMATION_DURATION = 400;
+    public boolean acceptDropIntoCannon(ItemInfo item) {
+        final int itemType = item.itemType;
+        return itemType == LauncherSettings.Favorites.ITEM_TYPE_APPLICATION ||
+                itemType == LauncherSettings.Favorites.ITEM_TYPE_SHORTCUT;
+    }
+
+    public void dropIntoCannon(DropTarget.DragObject d, final Runnable actionAfterFireAnimation) {
+        onDrop(d.dragView, mLauncher.getAllAppsButton(), 1.0f, (ItemInfo) d.dragInfo, d.postAnimationRunnable, actionAfterFireAnimation);
+    }
+    /***********************/
 }
