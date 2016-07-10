@@ -55,24 +55,25 @@ public class LauncherAnimUtils {
     // it should be cancelled
     public static void startAnimationAfterNextDraw(final Animator animator, final View view) {
         view.getViewTreeObserver().addOnDrawListener(new ViewTreeObserver.OnDrawListener() {
-                private boolean mStarted = false;
-                public void onDraw() {
-                    if (mStarted) return;
-                    mStarted = true;
-                    // Use this as a signal that the animation was cancelled
-                    if (animator.getDuration() == 0) {
-                        return;
-                    }
-                    animator.start();
+            private boolean mStarted = false;
 
-                    final ViewTreeObserver.OnDrawListener listener = this;
-                    view.post(new Runnable() {
-                            public void run() {
-                                view.getViewTreeObserver().removeOnDrawListener(listener);
-                            }
-                        });
+            public void onDraw() {
+                if (mStarted) return;
+                mStarted = true;
+                // Use this as a signal that the animation was cancelled
+                if (animator.getDuration() == 0) {
+                    return;
                 }
-            });
+                animator.start();
+
+                final ViewTreeObserver.OnDrawListener listener = this;
+                view.post(new Runnable() {
+                    public void run() {
+                        view.getViewTreeObserver().removeOnDrawListener(listener);
+                    }
+                });
+            }
+        });
     }
 
     public static void onDestroyActivity() {
@@ -108,6 +109,17 @@ public class LauncherAnimUtils {
         return anim;
     }
 
+    public static LauncherAnimatorHelper ofLauncherAnimatorHelperFloat(View target, String propertyName, float... values) {
+        ObjectAnimator anim = new ObjectAnimator();
+        anim.setTarget(target);
+        anim.setPropertyName(propertyName);
+        anim.setFloatValues(values);
+        cancelOnDestroyActivity(anim);
+        FirstFrameAnimatorHelper firstFrame = new FirstFrameAnimatorHelper(anim, target);
+        LauncherAnimatorHelper result = new LauncherAnimatorHelper(anim, firstFrame);
+        return result;
+    }
+
     public static ObjectAnimator ofPropertyValuesHolder(View target,
             PropertyValuesHolder... values) {
         ObjectAnimator anim = new ObjectAnimator();
@@ -116,6 +128,18 @@ public class LauncherAnimUtils {
         cancelOnDestroyActivity(anim);
         new FirstFrameAnimatorHelper(anim, target);
         return anim;
+    }
+
+    public static LauncherAnimatorHelper ofLauncherAnimatorHelperPropertyValuesHolder(View target,
+                                                        PropertyValuesHolder... values) {
+        ObjectAnimator anim = new ObjectAnimator();
+        anim.setTarget(target);
+        anim.setValues(values);
+        cancelOnDestroyActivity(anim);
+        FirstFrameAnimatorHelper firstFrame = new FirstFrameAnimatorHelper(anim, target);
+        LauncherAnimatorHelper result = new LauncherAnimatorHelper(anim, firstFrame);
+
+        return result;
     }
 
     public static ObjectAnimator ofPropertyValuesHolder(Object target,

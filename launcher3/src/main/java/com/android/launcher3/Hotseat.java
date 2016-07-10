@@ -16,8 +16,11 @@
 
 package com.android.launcher3;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
-import android.animation.ObjectAnimator;
+import android.animation.PropertyValuesHolder;
+import android.animation.ValueAnimator;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -29,17 +32,38 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.animation.AccelerateInterpolator;
+import android.view.animation.AnimationSet;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import com.android.launcher3.util.Logger;
+import com.android.launcher3.view.FoodInfo;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class Hotseat extends FrameLayout {
     private static final String LOG_TAG = Logger.getLogTag(Hotseat.class);
+    private static final int DURATION_ACCEPT_DROP = 200;
+    private static final int DURATION_RETURN_NEUTRAL = 200;
+    private static final int DURATION_DROP_IN_CANNON = 400;
+
+    private static final int DURATION_FIRE_CANNON_SCALE_Y = 120;
+    private static final int DURATION_FIRE_CANNON_SCALE_Y_BACK = 180;
+    private static final int DURATION_FIRE_CANNON_SCALE_X = 120;
+    private static final int DURATION_FIRE_CANNON_SCALE_X_BACK = 180;
+
+    private static final int DURATION_FIRE_CANNON_SCALE_CHARGE = 600;
+    private static final int DURATION_FIRE_CANNON_SCALE_SHOOT = 100;
+    private static final int DURATION_FIRE_CANNON_SCALE_RECOVERY = 200;
+
+    public static final float DURATION_FRACTION_TO_NOTIFY_FOOD = 0.5f;
+
+    private static final int CONFIG_FIRE_CANNON_SHIFT = 30;
+    public static final float CONFIG_FIRE_CANNON_SCALE_SHOOT = 1.8f;
 
     private CellLayout mContent;
 
@@ -175,6 +199,7 @@ public class Hotseat extends FrameLayout {
             int y = getCellYFromOrder(mAllAppsButtonRank);
             CellLayout.LayoutParams lp = new CellLayout.LayoutParams(x,y,1,1);
             lp.canReorder = false;
+            lp.isLockedToGrid = true;
             mContent.addViewToCellLayout(allAppsButton, -1, allAppsButton.getId(), lp, true);
         }
     }
@@ -240,38 +265,48 @@ public class Hotseat extends FrameLayout {
         }
     }
 
-    private Drawable mBoxDrawable;
+    private Drawable mCannonDrawable;
     private Drawable mAllAppsDrawable;
 
     private void prepareAllAppsButtonAsset(Context context) {
-        mBoxDrawable = context.getResources().getDrawable(R.drawable.ic_setting);
-        Utilities.resizeIconDrawable(mBoxDrawable);
+        mCannonDrawable = context.getResources().getDrawable(R.drawable.cannon168);
+        Utilities.resizeIconDrawable(mCannonDrawable);
 
         mAllAppsDrawable = context.getResources().getDrawable(R.drawable.all_apps_button_icon);
         Utilities.resizeIconDrawable(mAllAppsDrawable);
     }
 
+    private boolean mNeedToDelayChangeToAllapps;
     public void onDragStart(final DragSource source, Object info, int dragAction) {
-        View allappsbutton = mLauncher.getAllAppsButton();
-        if (allappsbutton instanceof TextView) {
-            Logger.d(LOG_TAG, "hotseat onDragStart");
-
-
-            ((TextView) allappsbutton).setCompoundDrawables(null, mBoxDrawable, null, null);
-        }
+        mNeedToDelayChangeToAllapps = false;
+        changeToCannon();
     }
 
     public void onDragEnd() {
+        if (!mNeedToDelayChangeToAllapps)
+            changeToAllapps();
+    }
+
+    private void changeToCannon() {
+        View allappsbutton = mLauncher.getAllAppsButton();
+        if (allappsbutton instanceof TextView) {
+            Logger.d(LOG_TAG, "hotseat onDragStart");
+            ((TextView) allappsbutton).setCompoundDrawables(null, mCannonDrawable, null, null);
+        }
+    }
+
+    private void changeToAllapps() {
         View allappsbutton = mLauncher.getAllAppsButton();
         if (allappsbutton instanceof TextView) {
             Logger.d(LOG_TAG, "hotseat onDragEnd");
-//            TransitionDrawable td = (TransitionDrawable)((TextView) allappsbutton).getCompoundDrawables()[1];
-//            td.resetTransition();
             ((TextView) allappsbutton).setCompoundDrawables(null, mAllAppsDrawable, null, null);
         }
     }
 
-    public void onDragEnterAllAppsButton() {
+    public void onDragEnterAllAppsButton(ItemInfo info) {
+        if (!acceptDropIntoCannon(info))
+            return;
+
         if (mAllAppsButtonAnimator != null)
             mAllAppsButtonAnimator.startAccept();
     }
@@ -284,26 +319,101 @@ public class Hotseat extends FrameLayout {
     private AllAppsButtonAnimator mAllAppsButtonAnimator;
 
     private class AllAppsButtonAnimator {
-        private static final int mDurationOfAccept = 500;
-        private static final int mDurationOfNeutral = 500;
-        private AnimatorSet mAcceptAnimator;
-        private AnimatorSet mNeutralAnimator;
+        private ValueAnimator mAcceptAnimator;
+        private ValueAnimator mNeutralAnimator;
+        private AnimatorSet mFireAnimatorSet;
+        private List<Animator> mFireAnimatorList;
+        ItemInfo mItemInfoToFire;
+        Runnable mActionAfterFireAnimation;
 
+        private boolean hasNotifyShoot = false;
         AllAppsButtonAnimator(View allappsButton) {
-            ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(allappsButton, "scaleX", 1.5f);
-            ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(allappsButton, "scaleY", 1.5f);
-            scaleUpX.setDuration(mDurationOfAccept);
-            scaleUpY.setDuration(mDurationOfAccept);
-            mAcceptAnimator = new AnimatorSet();
-            mAcceptAnimator.play(scaleUpX).with(scaleUpY);
+            mAcceptAnimator = LauncherAnimUtils.ofPropertyValuesHolder(allappsButton,
+                    PropertyValuesHolder.ofFloat("scaleX", 1.3f),
+                    PropertyValuesHolder.ofFloat("scaleY", 1.3f));
+
+            mAcceptAnimator.setDuration(DURATION_ACCEPT_DROP);
+
+            mNeutralAnimator = LauncherAnimUtils.ofPropertyValuesHolder(allappsButton,
+                    PropertyValuesHolder.ofFloat("scaleX", allappsButton.getScaleX()),
+                    PropertyValuesHolder.ofFloat("scaleY", allappsButton.getScaleY()));
+
+            mNeutralAnimator.setDuration(DURATION_RETURN_NEUTRAL);
+
+            mFireAnimatorSet = LauncherAnimUtils.createAnimatorSet();
+            float initTranslationY = allappsButton.getTranslationY();
+            ValueAnimator scaleYAnimator = LauncherAnimUtils.ofFloat(allappsButton, "scaleY", 1.3f);
+            ValueAnimator scaleYBackAnimator = LauncherAnimUtils.ofFloat(allappsButton, "scaleY", 1f);
+            ValueAnimator scaleXAnimator = LauncherAnimUtils.ofFloat(allappsButton, "scaleX", 1.3f);
+            ValueAnimator scaleXBackAnimator = LauncherAnimUtils.ofFloat(allappsButton, "scaleX", 1f);
+
+            ValueAnimator chargeAnimator = LauncherAnimUtils.ofPropertyValuesHolder(allappsButton,
+                    PropertyValuesHolder.ofFloat("scaleX", 1.3f),
+                    PropertyValuesHolder.ofFloat("scaleY", 0.5f),
+                    PropertyValuesHolder.ofFloat("translationY", initTranslationY + 1.5f * Utilities.pxFromDp(CONFIG_FIRE_CANNON_SHIFT, allappsButton.getResources().getDisplayMetrics())));
 
 
-            ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(allappsButton, "scaleX", allappsButton.getScaleX());
-            ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(allappsButton, "scaleY", allappsButton.getScaleY());
-            scaleDownX.setDuration(mDurationOfNeutral);
-            scaleDownY.setDuration(mDurationOfNeutral);
-            mNeutralAnimator = new AnimatorSet();
-            mNeutralAnimator.play(scaleDownX).with(scaleDownY);
+            ValueAnimator shootAnimator = LauncherAnimUtils.ofPropertyValuesHolder(allappsButton,
+                    PropertyValuesHolder.ofFloat("scaleX", 0.5f),
+                    PropertyValuesHolder.ofFloat("scaleY", CONFIG_FIRE_CANNON_SCALE_SHOOT),
+                    PropertyValuesHolder.ofFloat("translationY", initTranslationY  - Utilities.pxFromDp(CONFIG_FIRE_CANNON_SHIFT, allappsButton.getResources().getDisplayMetrics())));
+
+            ValueAnimator recoveryAnimator = LauncherAnimUtils.ofPropertyValuesHolder(allappsButton,
+                    PropertyValuesHolder.ofFloat("scaleX", allappsButton.getScaleX()),
+                    PropertyValuesHolder.ofFloat("scaleY", allappsButton.getScaleY()),
+                    PropertyValuesHolder.ofFloat("translationY", initTranslationY));
+
+
+            scaleYAnimator.setDuration(DURATION_FIRE_CANNON_SCALE_Y);
+            scaleYAnimator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+                    Logger.d(LOG_TAG, "hotseat scaleYAnimator start");
+                    hasNotifyShoot = false;
+                }
+            });
+
+            scaleYBackAnimator.setDuration(DURATION_FIRE_CANNON_SCALE_Y_BACK);
+            scaleYBackAnimator.setStartDelay(DURATION_FIRE_CANNON_SCALE_Y);
+
+            scaleXAnimator.setDuration(DURATION_FIRE_CANNON_SCALE_X);
+            scaleXAnimator.setStartDelay(DURATION_FIRE_CANNON_SCALE_Y);
+
+            scaleXBackAnimator.setDuration(DURATION_FIRE_CANNON_SCALE_X_BACK);
+            scaleXBackAnimator.setStartDelay(DURATION_FIRE_CANNON_SCALE_Y + DURATION_FIRE_CANNON_SCALE_X);
+
+            chargeAnimator.setDuration(DURATION_FIRE_CANNON_SCALE_CHARGE);
+            chargeAnimator.setStartDelay(DURATION_FIRE_CANNON_SCALE_Y + DURATION_FIRE_CANNON_SCALE_X + DURATION_FIRE_CANNON_SCALE_X_BACK);
+
+            shootAnimator.setDuration(DURATION_FIRE_CANNON_SCALE_SHOOT);
+            shootAnimator.setStartDelay(DURATION_FIRE_CANNON_SCALE_Y + DURATION_FIRE_CANNON_SCALE_X + DURATION_FIRE_CANNON_SCALE_X_BACK + DURATION_FIRE_CANNON_SCALE_CHARGE);
+            shootAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                @Override
+                public void onAnimationUpdate(ValueAnimator animation) {
+                    if (!hasNotifyShoot && animation.getAnimatedFraction() > DURATION_FRACTION_TO_NOTIFY_FOOD) {
+                        notifyToSupplyFood();
+                        hasNotifyShoot = true;
+                    }
+                }
+            });
+
+            recoveryAnimator.setDuration(DURATION_FIRE_CANNON_SCALE_RECOVERY);
+            recoveryAnimator.setStartDelay(DURATION_FIRE_CANNON_SCALE_Y + DURATION_FIRE_CANNON_SCALE_Y_BACK + DURATION_FIRE_CANNON_SCALE_X + DURATION_FIRE_CANNON_SCALE_X_BACK + DURATION_FIRE_CANNON_SCALE_CHARGE + DURATION_FIRE_CANNON_SCALE_SHOOT);
+            recoveryAnimator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    super.onAnimationEnd(animation);
+                    notifyFireAnimationEnd();
+                }
+            });
+
+            mFireAnimatorSet.play(scaleYAnimator);
+            mFireAnimatorSet.play(scaleYBackAnimator);
+            mFireAnimatorSet.play(scaleXAnimator);
+            mFireAnimatorSet.play(scaleXBackAnimator);
+            mFireAnimatorSet.play(chargeAnimator);
+            mFireAnimatorSet.play(shootAnimator);
+            mFireAnimatorSet.play(recoveryAnimator);
 
         }
 
@@ -319,13 +429,63 @@ public class Hotseat extends FrameLayout {
         public void startNeutral() {
             Logger.d(LOG_TAG, "hotseat startNeutral");
             if (mAcceptAnimator.isRunning())
-                mAcceptAnimator.cancel();
+                mAcceptAnimator.end();
 
             if (!mNeutralAnimator.isRunning())
                 mNeutralAnimator.start();
         }
+
+        public void prepareFire(ItemInfo itemInfo, final Runnable actionAfterFireAnimation) {
+            Logger.d(LOG_TAG, "hotseat prepareFire");
+            mItemInfoToFire = itemInfo;
+            mActionAfterFireAnimation = actionAfterFireAnimation;
+            //reparent to get enough space for animation
+            View allappsbutton = mLauncher.getAllAppsButton();
+            mLastLayoutParamsOfAllappsbutton = (CellLayout.LayoutParams) allappsbutton.getLayoutParams();
+            mDragLayerLayoutParamsOfAllappsbutton = getDragLayerLayoutParams(allappsbutton);
+            allappsbutton.setLayoutParams(mDragLayerLayoutParamsOfAllappsbutton);
+            mLauncher.reparentToFireCannon(allappsbutton);
+
+            mFireAnimatorSet.start();
+        }
+
+
+        public void notifyToSupplyFood() {
+            Logger.d(LOG_TAG, "hotseat notifyToSupplyFood");
+            Runnable runnable = new Runnable() {
+                @Override
+                public void run() {
+                    changeToAllapps();
+                    if (mActionAfterFireAnimation != null)
+                        mActionAfterFireAnimation.run();
+                }
+            };
+            mLauncher.fireToParkView(mLauncher, mItemInfoToFire, runnable);
+        }
+
+        private void notifyFireAnimationEnd() {
+            mIsDuringDropAndFireAnimation = false;
+
+            View allappsbutton = mLauncher.getAllAppsButton();
+            allappsbutton.setLayoutParams(mLastLayoutParamsOfAllappsbutton);
+            ((ViewGroup) allappsbutton.getParent()).removeView(allappsbutton);
+            mContent.addViewToCellLayout(allappsbutton, -1, allappsbutton.getId(), mLastLayoutParamsOfAllappsbutton, true);
+
+        }
     }
 
+    private CellLayout.LayoutParams mLastLayoutParamsOfAllappsbutton;
+    private DragLayer.LayoutParams mDragLayerLayoutParamsOfAllappsbutton;
+
+    private DragLayer.LayoutParams getDragLayerLayoutParams(View view) {
+        int[] loc = new int[2];
+        mLauncher.getDragLayer().getLocationInDragLayer(view, loc);
+        DragLayer.LayoutParams dlp = new DragLayer.LayoutParams(view.getLayoutParams());
+        dlp.setX(loc[0]);
+        dlp.setY(loc[1]);
+        dlp.customPosition = true;
+        return dlp;
+    }
 
     /***prepare accept drop animation**/
     private void onDrop(DragView animateView, View targetView, float scaleRelativeToDragLayer, final ItemInfo itemInfo, final Runnable postAnimationRunnable, final Runnable actionAfterFireAnimation) {
@@ -333,6 +493,7 @@ public class Hotseat extends FrameLayout {
         // Typically, the animateView corresponds to the DragView; however, if this is being done
         // after a configuration activity (ie. for a Shortcut being dragged from AllApps) we
         // will not have a view to animate
+        mNeedToDelayChangeToAllapps = true;
         if (animateView != null) {
             DragLayer dragLayer = mLauncher.getDragLayer();
             Rect from = new Rect();
@@ -362,33 +523,42 @@ public class Hotseat extends FrameLayout {
                 public void run() {
                     if (postAnimationRunnable != null)
                         postAnimationRunnable.run();
-                    fireCannonBall(itemInfo, actionAfterFireAnimation);
+                    prefireCannonBall(itemInfo, actionAfterFireAnimation);
                 }
             };
             dragLayer.animateView(animateView, from, to, finalAlpha,
-                    1, 1, finalScale, finalScale, DROP_IN_ANIMATION_DURATION,
+                    1, 1, finalScale, finalScale, DURATION_DROP_IN_CANNON,
                     new DecelerateInterpolator(2), new AccelerateInterpolator(2),
                     actionAfterDropInAnimation, DragLayer.ANIMATION_END_DISAPPEAR, null);
         } else {
-            fireCannonBall(itemInfo, actionAfterFireAnimation);
+            prefireCannonBall(itemInfo, actionAfterFireAnimation);
         }
     }
 
-    private void fireCannonBall(ItemInfo itemInfo, final Runnable actionAfterFireAnimation) {
-        postDelayed(actionAfterFireAnimation, 1000);
+    private void prefireCannonBall(ItemInfo itemInfo, final Runnable actionAfterFireAnimation) {
+        mAllAppsButtonAnimator.prepareFire(itemInfo, actionAfterFireAnimation);
 //        if (actionAfterFireAnimation != null)
 //            actionAfterFireAnimation.run();
     }
 
-    private static final int DROP_IN_ANIMATION_DURATION = 400;
+    private void preparefire() {
+
+    }
+
     public boolean acceptDropIntoCannon(ItemInfo item) {
         final int itemType = item.itemType;
-        return itemType == LauncherSettings.Favorites.ITEM_TYPE_APPLICATION ||
-                itemType == LauncherSettings.Favorites.ITEM_TYPE_SHORTCUT;
+        return !mIsDuringDropAndFireAnimation && (itemType == LauncherSettings.Favorites.ITEM_TYPE_APPLICATION ||
+                itemType == LauncherSettings.Favorites.ITEM_TYPE_SHORTCUT);
     }
 
     public void dropIntoCannon(DropTarget.DragObject d, final Runnable actionAfterFireAnimation) {
+        if (mIsDuringDropAndFireAnimation)
+            return;
+
+        mIsDuringDropAndFireAnimation = true;
         onDrop(d.dragView, mLauncher.getAllAppsButton(), 1.0f, (ItemInfo) d.dragInfo, d.postAnimationRunnable, actionAfterFireAnimation);
     }
+
+    private boolean mIsDuringDropAndFireAnimation;
     /***********************/
 }

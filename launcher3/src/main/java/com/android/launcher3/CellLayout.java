@@ -46,6 +46,7 @@ import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LayoutAnimationController;
 
 import com.android.launcher3.FolderIcon.FolderRingAnimator;
+import com.android.launcher3.util.Logger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -2025,6 +2026,17 @@ public class CellLayout extends ViewGroup {
             for (int j = 0; j < mCountY; j++) {
                 occupied[i][j] = mOccupied[i][j];
             }
+        }
+    }
+
+    public void logOccupiedArray() {
+        boolean[][] occupied = mOccupied;
+        for (int i = 0; i < mCountX; i++) {
+            StringBuilder sb = new StringBuilder();
+            for (int j = 0; j < mCountY; j++) {
+                sb.append(occupied[i][j] ? "*" : "-");
+            }
+            Logger.d("jasonlai", "x %s, %s", i, sb.toString());
         }
     }
 

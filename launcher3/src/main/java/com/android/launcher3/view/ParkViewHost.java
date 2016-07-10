@@ -1,5 +1,10 @@
 package com.android.launcher3.view;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.Keyframe;
+import android.animation.PropertyValuesHolder;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.PointF;
 import android.graphics.Rect;
@@ -7,13 +12,16 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Interpolator;
 
 import com.android.launcher3.DragController;
 import com.android.launcher3.DragSource;
 import com.android.launcher3.DropTarget;
 import com.android.launcher3.Insettable;
-import com.android.launcher3.SpringLoadedDragController;
+import com.android.launcher3.LauncherAnimUtils;
 import com.android.launcher3.util.Logger;
+
+import java.util.Random;
 
 /**
  * Created by NineG on 2016/5/15.
@@ -35,6 +43,7 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
 
     public ParkViewHost(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        setOnHierarchyChangeListener(this);
     }
 
     /**
@@ -65,8 +74,11 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
             final View child = getChildAt(i);
             if (child.getVisibility() != GONE) {
                 ParkViewHost.LayoutParams lp = (ParkViewHost.LayoutParams) child.getLayoutParams();
-                int childLeft = lp.x;
-                int childTop = lp.y;
+                int childLeft = (int) lp.getX();
+                int childTop = (int) lp.getY();
+                Logger.d(LOG_TAG, "onLayout %s %s ,%s", childLeft, childTop, child);
+                child.setTranslationX(0);
+                child.setTranslationY(0);
                 child.layout(childLeft, childTop, childLeft + child.getMeasuredWidth(), childTop + child.getMeasuredHeight());
             }
         }
@@ -107,9 +119,18 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         return new LayoutParams(p);
     }
 
+    protected LayoutParams generateLayoutParams(BaseUnitInfo info) {
+        return new LayoutParams(info);
+    }
 
     public static class LayoutParams extends ViewGroup.LayoutParams {
-        public int x, y;
+        BaseUnitInfo info;
+        public LayoutParams(BaseUnitInfo info) {
+            super(info.getCurrentWidth(), info.getCurrentHeight());
+            this.info = info;
+        }
+
+        private int x, y;
 
         public LayoutParams(Context c, AttributeSet attrs) {
             super(c, attrs);
@@ -123,36 +144,59 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
             super(lp);
         }
 
-        public void setWidth(int width) {
-            this.width = width;
-        }
+//        public void setWidth(int width) {
+//            this.width = width;
+//        }
+//
+//        public int getWidth() {
+//            return width;
+//        }
+//
+//        public void setHeight(int height) {
+//            this.height = height;
+//        }
+//
+//        public int getHeight() {
+//            return height;
+//        }
+//
+//        public void setX(int x) {
+//            this.x = x;
+//        }
+//
+//        public int getX() {
+//            return x;
+//        }
+//
+//        public void setY(int y) {
+//            this.y = y;
+//        }
+//
+//        public int getY() {
+//            return y;
+//        }
 
         public int getWidth() {
-            return width;
+            return info.getCurrentWidth();
         }
-
-        public void setHeight(int height) {
-            this.height = height;
-        }
-
         public int getHeight() {
-            return height;
+            return info.getCurrentHeight();
         }
 
-        public void setX(int x) {
-            this.x = x;
+        public void setX(float x) {
+            info.setX(x);
         }
 
-        public int getX() {
-            return x;
+        public float getX() {
+            return info.getX();
         }
 
-        public void setY(int y) {
-            this.y = y;
+        public void setY(float y) {
+            info.setY(y);
         }
 
-        public int getY() {
-            return y;
+        public float getY() {
+            return info.getY();
         }
     }
 
@@ -326,8 +370,11 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         cl.setOnInterceptTouchListener(this);
         cl.setClickable(true);
         mUnitManager.addUnit(cl.getUnitInfo());
-    }
 
+        if (cl instanceof PetView) {
+            ((PetView) cl).startMovement();
+        }
+    }
     /**
      * Called when a child is removed from a parent view.
      *
@@ -369,14 +416,115 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
     }
 
     public boolean addInScreen(BaseUnitView child, BaseUnitInfo info, int x, int y) {
-        LayoutParams params = generateDefaultLayoutParams();
-        params.x = x;
-        params.y = y;
+        if (child == null) {
+            Logger.d(LOG_TAG, "addInScreen fail %s %s %s", info, x, y);
+            return false;
+        }
+
+        Logger.d(LOG_TAG, "addInScreen %s %s %s", info, x, y);
+
+        LayoutParams params = generateLayoutParams(info);
+        params.setX(x);
+        params.setY(y);
         child.setLayoutParams(params);
         child.setUnitInfo(info);
         child.setOnLongClickListener(mOnLongClickListener);
         addView(child);
         return true;
+    }
+
+
+    public boolean fireInScreen(BaseUnitView child, BaseUnitInfo info, int x, int y, Runnable actionAfterFire) {
+        if (child == null) {
+            Logger.d(LOG_TAG, "addInScreen %s %s %s", info, x, y);
+            return false;
+        }
+
+        LayoutParams params = generateLayoutParams(info);
+        params.setX(x - info.getCurrentWidth() / 2);
+        params.setY(y - info.getCurrentHeight());
+        child.setLayoutParams(params);
+        child.setUnitInfo(info);
+        child.setOnLongClickListener(mOnLongClickListener);
+        child.setPivotX(0.5f*info.getCurrentWidth());
+        child.setPivotY(0.5f*info.getCurrentHeight());
+        addView(child);
+        int[] tagetLoc = getTargetLoc(info.getCurrentWidth(), info.getCurrentHeight());
+//        child.setX(params.x);
+//        child.setY(params.y);
+//        child.setScaleX(0.5f);
+//        child.setScaleY(0.5f);
+
+//        layout(getLeft(), getTop(), getRight(), getBottom());
+        playFireAnimation(child, params.getX(), params.getY(), tagetLoc[0], tagetLoc[1], 1f, actionAfterFire);
+
+        Logger.d(LOG_TAG, "fireInScreen %s %s %s %s, %s", params.getX(), params.getY(), tagetLoc[0], tagetLoc[1], child);
+        return true;
+    }
+
+    Random mRandom = new Random();
+    private int[] getTargetLoc(int offsetX, int offsetY) {
+        int x = mRandom.nextInt(getChildPossibleLocX()[1] - offsetX);
+        int y = mRandom.nextInt(getChildPossibleLocY()[1] - offsetY);
+
+        return new int[]{x, y};
+    }
+
+    public void playFireAnimation(final View targetView, final float initX, final float initY, final float targetX, final float targetY, final float initScale, final Runnable actionAfterFire) {
+        Keyframe kfTranslationX0 = Keyframe.ofFloat(0, initX);
+        Keyframe kfTranslationX100 = Keyframe.ofFloat(100, targetX);
+
+        Keyframe kfTranslationY0 = Keyframe.ofFloat(0, initY);
+        Keyframe kfTranslationY100 = Keyframe.ofFloat(100, targetY);
+
+        Keyframe kfScale0 = Keyframe.ofFloat(0, initScale);
+        Keyframe kfScale50 = Keyframe.ofFloat(0.5f, 3f);
+        Keyframe kfScale100 = Keyframe.ofFloat(1f, 1f);
+
+        ValueAnimator fireAnimator = LauncherAnimUtils.ofPropertyValuesHolder(targetView,
+                PropertyValuesHolder.ofKeyframe("x", kfTranslationX0, kfTranslationX100),
+                PropertyValuesHolder.ofKeyframe("y", kfTranslationY0, kfTranslationY100),
+                PropertyValuesHolder.ofKeyframe("scaleX", kfScale0, kfScale50, kfScale100),
+                PropertyValuesHolder.ofKeyframe("scaleY", kfScale0, kfScale50, kfScale100));
+
+        fireAnimator.setInterpolator(new DecelerateAccelerateInterpolator(2f));
+        fireAnimator.setDuration(1000);
+        fireAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                super.onAnimationEnd(animation);
+                Logger.d(LOG_TAG, "playFireAnimation end %s, %s", targetX, targetY);
+                LayoutParams params = (LayoutParams) targetView.getLayoutParams();
+                params.setX(targetX);
+                params.setY(targetY);
+                mUnitManager.notifyNewItemFired(targetView.getContext(), ((BaseUnitView) targetView).getUnitInfo());
+
+                if (actionAfterFire != null)
+                    actionAfterFire.run();
+            }
+        });
+        fireAnimator.start();
+    }
+
+    public class DecelerateAccelerateInterpolator implements Interpolator {
+        private float mFactor = 1.0f;
+
+        public DecelerateAccelerateInterpolator() {
+        }
+
+        public DecelerateAccelerateInterpolator(float factor) {
+            mFactor = factor;
+        }
+
+        public float getInterpolation(float x) {
+            float result;
+            if (x < 0.5) {
+                result = (float) (1.0f - Math.pow((1.0f - 2 * x), 2 * mFactor)) / 2;
+            } else {
+                result = (float) Math.pow((x - 0.5) * 2, 2 * mFactor) / 2 + 0.5f;
+            }
+            return result;
+        }
     }
 
     @Override
@@ -393,5 +541,43 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         return result;
     }
 
-    private UnitManager mUnitManager = new UnitManager();
+    private UnitManager mUnitManager;
+    public void setUnitManager(UnitManager unitManager) {
+        mUnitManager = unitManager;
+    }
+
+    public void getViewRectRelativeToSelf(View v, Rect r) {
+        int[] loc = new int[2];
+        getLocationInWindow(loc);
+        int x = loc[0];
+        int y = loc[1];
+
+        v.getLocationInWindow(loc);
+        int vX = loc[0];
+        int vY = loc[1];
+
+        int left = vX - x;
+        int top = vY - y;
+
+        r.set(left, top, left + v.getMeasuredWidth(), top + v.getMeasuredHeight());
+    }
+
+    int mHotseatHeight;
+    public void setHotseatHeight(int hotseatHeight) {
+        mHotseatHeight = hotseatHeight;
+    }
+
+    public int[] getChildPossibleLocX() {
+        int[] result = new int[2];
+        result[0] = 0;
+        result[1] = getMeasuredWidth();
+        return result;
+    }
+
+    public int[] getChildPossibleLocY() {
+        int[] result = new int[2];
+        result[0] = 0;
+        result[1] = getMeasuredHeight() - mHotseatHeight;
+        return result;
+    }
 }

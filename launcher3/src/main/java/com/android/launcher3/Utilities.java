@@ -42,9 +42,11 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.PaintDrawable;
 import android.os.Build;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Pair;
 import android.util.SparseArray;
+import android.util.TypedValue;
 import android.view.View;
 import android.widget.Toast;
 
@@ -541,5 +543,18 @@ public final class Utilities {
             }
         }
         return defaultWidgetForSearchPackage;
+    }
+
+    public static int pxFromDp(float size, DisplayMetrics metrics) {
+        return (int) Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,
+                size, metrics));
+    }
+
+    public static Double sqareDistance(float targetX, float targetY, float baseX, float baseY) {
+        return Math.pow(targetX - baseX, 2) + Math.pow(targetY - baseY, 2);
+    }
+
+    public static float distance(float targetX, float targetY, float baseX, float baseY) {
+        return (float) Math.sqrt(Math.pow(targetX - baseX, 2) + Math.pow(targetY - baseY, 2));
     }
 }

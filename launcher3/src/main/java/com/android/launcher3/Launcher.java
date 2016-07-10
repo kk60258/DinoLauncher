@@ -107,10 +107,15 @@ import com.android.launcher3.compat.PackageInstallerCompat.PackageInstallInfo;
 import com.android.launcher3.compat.UserHandleCompat;
 import com.android.launcher3.compat.UserManagerCompat;
 import com.android.launcher3.util.Logger;
+import com.android.launcher3.view.BaseUnitInfo;
 import com.android.launcher3.view.BaseUnitView;
+import com.android.launcher3.view.FoodInfo;
+import com.android.launcher3.view.FoodView;
 import com.android.launcher3.view.ParkViewHost;
+import com.android.launcher3.view.PetInfo;
 import com.android.launcher3.view.PetPigInfo;
 import com.android.launcher3.view.PetView;
+import com.android.launcher3.view.UnitManager;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -443,7 +448,9 @@ public class Launcher extends Activity
 
         setupViews();
         grid.layout(this);
-
+        if (mParkViewHost != null && mHotseat != null) {
+            mParkViewHost.setHotseatHeight(mHotseat.getLayoutParams().height);
+        }
         registerContentObservers();
 
         lockAllApps();
@@ -1365,7 +1372,6 @@ public class Launcher extends Activity
         mDragLayer = (DragLayer) findViewById(R.id.drag_layer);
         mWorkspace = (Workspace) mDragLayer.findViewById(R.id.workspace);
         mWorkspace.setPageSwitchListener(this);
-        mParkViewHost = (ParkViewHost) findViewById(R.id.parkviewhost);
         mPageIndicators = mDragLayer.findViewById(R.id.page_indicator);
 
         mLauncherView.setSystemUiVisibility(
@@ -1380,6 +1386,15 @@ public class Launcher extends Activity
         if (mHotseat != null) {
             mHotseat.setup(this);
             mHotseat.setOnLongClickListener(this);
+        }
+
+        mParkViewHost = (ParkViewHost) findViewById(R.id.parkviewhost);
+        if (mParkViewHost != null) {
+            mUnitManager = new UnitManager();
+            mParkViewHost.setUnitManager(mUnitManager);
+            if (mHotseat != null) {
+                mParkViewHost.setHotseatHeight(mHotseat.getLayoutParams().height);
+            }
         }
 
         mOverviewPanel = (ViewGroup) findViewById(R.id.overview_panel);
@@ -3134,6 +3149,12 @@ public class Launcher extends Activity
         getDragLayer().sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
     }
 
+    public void reparentToFireCannon(View mAllAppsButton) {
+        ((ViewGroup)mAllAppsButton.getParent()).removeView(mAllAppsButton);
+        mDragLayer.addView(mAllAppsButton);
+    }
+
+
     public void closeFolder() {
         Folder folder = mWorkspace != null ? mWorkspace.getOpenFolder() : null;
         if (folder != null) {
@@ -4549,9 +4570,8 @@ public class Launcher extends Activity
         }
 
         if (mParkViewHost != null) {
-            PetView petView = new PetView(this);
             PetPigInfo pigInfo = new PetPigInfo(this);
-            mParkViewHost.addInScreen(petView, pigInfo, 500, 500);
+            addInParkview(this, pigInfo, 500, 500);
         }
 
         PackageInstallerCompat.getInstance(this).onFinishBind();
@@ -5197,6 +5217,28 @@ public class Launcher extends Activity
     }
 
     private ParkViewHost mParkViewHost;
+    private UnitManager mUnitManager;
+
+    private void addInParkview(Context context, BaseUnitInfo info, int initX, int initY) {
+        if (mParkViewHost == null)
+            return;
+
+        BaseUnitView add = info.generateView(context);
+        mParkViewHost.addInScreen(add, info, 500, 500);
+    }
+
+
+    public void fireToParkView(Context context, ItemInfo itemInfo, Runnable actionAfterFire) {
+        if (mParkViewHost == null)
+            return;
+        Rect r = new Rect();
+        mParkViewHost.getViewRectRelativeToSelf(getAllAppsButton(), r);
+
+        BaseUnitInfo info = mUnitManager.transformFromItemInfo(context, itemInfo);
+        BaseUnitView add = info.generateView(context);
+        mParkViewHost.fireInScreen(add, info, r.centerX(), (int) (r.top - Hotseat.DURATION_FRACTION_TO_NOTIFY_FOOD * r.height() * (Hotseat.CONFIG_FIRE_CANNON_SCALE_SHOOT - 1)), actionAfterFire);
+
+    }
 }
 
 interface LauncherTransitionable {

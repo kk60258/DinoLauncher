@@ -3136,13 +3136,15 @@ public class Workspace extends SmoothPagedView
                     minSpanY = item.minSpanY;
                 }
 
+//                dropTargetLayout.logOccupiedArray();
                 int[] targetCellForCannon = findNearestArea((int) mDragViewVisualCenter[0],
                         (int) mDragViewVisualCenter[1], minSpanX, minSpanY, dropTargetLayout,
-                        mTargetCell);
+                        null);
+//                dropTargetLayout.logOccupiedArray();
 
 
+                Hotseat hotseat = mLauncher.getHotseat();
                 if (targetCellForCannon != null && hasMovedIntoHotseat) {
-                    Hotseat hotseat = mLauncher.getHotseat();
                     if (hotseat.isAllAppsButtonRank(hotseat.getOrderInHotseat(targetCellForCannon[0], targetCellForCannon[1])) && hotseat.acceptDropIntoCannon((ItemInfo) d.dragInfo)) {
                         CellLayout layout = (CellLayout) cell.getParent().getParent();
                         layout.markCellsAsOccupiedForView(cell);
@@ -3172,7 +3174,11 @@ public class Workspace extends SmoothPagedView
                         (int) mDragViewVisualCenter[1], minSpanX, minSpanY, spanX, spanY, cell,
                         mTargetCell, resultSpan, CellLayout.MODE_ON_DROP);
 
-                boolean foundCell = mTargetCell[0] >= 0 && mTargetCell[1] >= 0;
+                boolean foundCell = mTargetCell[0] >= 0 && mTargetCell[1] >= 0 &&
+                        (!hasMovedIntoHotseat ||
+                        (hasMovedIntoHotseat && !hotseat.isAllAppsButtonRank(hotseat.getOrderInHotseat(mTargetCell[0], mTargetCell[1]))));
+                //A workaround that mTargetCell will have 2,0 and it will be dropped on allapps button.
+                //Repo: drop 2nd item on allapps when the cannon is firing.
 
                 // if the widget resizes on drop
                 if (foundCell && (cell instanceof AppWidgetHostView) &&
@@ -3753,7 +3759,7 @@ public class Workspace extends SmoothPagedView
             final View dragOverView = mDragTargetLayout.getChildAt(mTargetCell[0],
                     mTargetCell[1]);
 
-            manageDragOverAllAppsButton(mDragTargetLayout, dragOverView);
+            manageDragOverAllAppsButton(mDragTargetLayout, dragOverView, info);
 
             manageFolderFeedback(info, mDragTargetLayout, mTargetCell,
                     targetCellDistance, dragOverView);
@@ -3793,12 +3799,14 @@ public class Workspace extends SmoothPagedView
         }
     }
 
-    private void manageDragOverAllAppsButton(CellLayout targetLayout, View dragOverView) {
-        if (!mIsDragOverAllAppsButton && mLauncher.isHotseatLayout(targetLayout) && dragOverView == mLauncher.getAllAppsButton()) {
-            mLauncher.getHotseat().onDragEnterAllAppsButton();
+    private void manageDragOverAllAppsButton(CellLayout targetLayout, View dragOverView, ItemInfo info) {
+        if (!mIsDragOverAllAppsButton && mLauncher.isHotseatLayout(targetLayout) &&
+                dragOverView == mLauncher.getAllAppsButton() && mLauncher.getHotseat().acceptDropIntoCannon(info)) {
+            mLauncher.getHotseat().onDragEnterAllAppsButton(info);
             mIsDragOverAllAppsButton = true;
             setDragMode(DRAG_MODE_OVER_ALLAPPS_BUTTON);
-        } else if (mIsDragOverAllAppsButton && (!mLauncher.isHotseatLayout(targetLayout) || dragOverView != mLauncher.getAllAppsButton())) {
+        } else if (mIsDragOverAllAppsButton && (!mLauncher.isHotseatLayout(targetLayout) ||
+                dragOverView != mLauncher.getAllAppsButton() || !mLauncher.getHotseat().acceptDropIntoCannon(info))) {
             clearDragOverAllappsButton();
         }
     }

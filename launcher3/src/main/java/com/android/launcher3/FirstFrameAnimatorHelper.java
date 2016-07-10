@@ -54,6 +54,10 @@ public class FirstFrameAnimatorHelper extends AnimatorListenerAdapter
         vpa.setListener(this);
     }
 
+    public void setTarget(View target) {
+        this.mTarget = target;
+    }
+
     // only used for ViewPropertyAnimators
     public void onAnimationStart(Animator animation) {
         final ValueAnimator va = (ValueAnimator) animation;

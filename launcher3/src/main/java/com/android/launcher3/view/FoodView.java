@@ -12,7 +12,7 @@ import com.android.launcher3.util.Logger;
  * Created by NineG on 2016/7/3.
  */
 public class FoodView extends BaseUnitView implements FoodInfo.OnInfoChangedObserver {
-    private static final String LOG_TAG = Logger.getLogTag(PetView.class);
+    private static final String LOG_TAG = Logger.getLogTag(FoodView.class);
 
     public FoodView(Context context) {
         super(context);

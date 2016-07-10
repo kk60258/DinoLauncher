@@ -28,4 +28,19 @@ public abstract class FoodInfo extends BaseUnitInfo {
     }
 
     abstract public Drawable getFoodAsset(Context context);
+
+    @Override
+    public BaseUnitView generateView(Context context) {
+        return new FoodView(context);
+    }
+
+    @Override
+    public boolean notifyNewInfo(Context context, BaseUnitInfo newInfo) {
+        return false;
+    }
+
+    public void beEaten(PetInfo petInfo, long progress) {
+        if (mOnInfoChangedObserver != null)
+            mOnInfoChangedObserver.beEaten(petInfo, progress);
+    }
 }

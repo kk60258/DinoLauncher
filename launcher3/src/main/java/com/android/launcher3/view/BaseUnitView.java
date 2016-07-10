@@ -109,4 +109,68 @@ public class BaseUnitView extends FrameLayout {
             Logger.d(LOG_TAG, "removeViewFromParent fail %s", this);
         }
     }
+
+
+    /**
+     * Sets the visual x position of this view, in pixels. This is equivalent to setting the
+     * {@link #setTranslationX(float) translationX} property to be the difference between
+     * the x value passed in and the current {@link #getLeft() left} property.
+     *
+     * @param x The visual x position of this view, in pixels.
+     */
+    @Override
+    public void setX(float x) {
+        super.setX(x);
+        mInfo.setX(x);
+//        Logger.d(LOG_TAG, "setX %s, %s", x, getTranslationX());
+    }
+
+    /**
+     * Sets the visual y position of this view, in pixels. This is equivalent to setting the
+     * {@link #setTranslationY(float) translationY} property to be the difference between
+     * the y value passed in and the current {@link #getTop() top} property.
+     *
+     * @param y The visual y position of this view, in pixels.
+     */
+    @Override
+    public void setY(float y) {
+        super.setY(y);
+        mInfo.setY(y);
+//        Logger.d(LOG_TAG, "setY %s, %s", y, getTranslationY());
+    }
+
+    /**
+     * The visual x position of this view, in pixels. This is equivalent to the
+     * {@link #setTranslationX(float) translationX} property plus the current
+     * {@link #getLeft() left} property.
+     *
+     * @return The visual x position of this view, in pixels.
+     */
+    @Override
+    public float getX() {
+        return super.getX();
+//        return mInfo.getX();
+    }
+
+    /**
+     * The visual y position of this view, in pixels. This is equivalent to the
+     * {@link #setTranslationY(float) translationY} property plus the current
+     * {@link #getTop() top} property.
+     *
+     * @return The visual y position of this view, in pixels.
+     */
+    @Override
+    public float getY() {
+        return super.getY();
+//        return mInfo.getY();
+    }
+
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+//        setTranslationX(0);
+//        setTranslationY(0);
+        Logger.d(LOG_TAG, "onLayout %s, %s", getX(), getY());
+    }
 }
+
+

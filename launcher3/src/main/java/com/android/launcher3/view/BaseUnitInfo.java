@@ -2,6 +2,7 @@ package com.android.launcher3.view;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 
@@ -17,15 +18,36 @@ public abstract class BaseUnitInfo {
 
     String id;
 
+    protected float x, y;
+
+    public void setX(float x) {
+        this.x = x;
+    }
+
+    public float getX() {
+        return x;
+    }
+
+    public void setY(float y) {
+        this.y = y;
+    }
+
+    public float getY() {
+        return y;
+    }
+
     protected State mCurrentState = State.Idle;
 
     enum State {
-        Idle("idle"), Eat("eat"), Sleep("sleep");
+        Idle("idle"), Eat("eat"), Sleep("sleep"), Move("move");
+        private int nextX, nextY;
+        private int duration;
         private final String key;
         State(String key) {
             this.key = key;
         }
     }
+
 
     class Size {
         int width;
@@ -65,6 +87,16 @@ public abstract class BaseUnitInfo {
                 size, metrics));
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (o instanceof BaseUnitInfo) {
+            return TextUtils.equals(((BaseUnitInfo) o).id, this.id);
+        }
+        return super.equals(o);
+    }
+
     abstract  protected void initSize(Context context);
     abstract  protected void onStateChanged(State oldState, State newState);
+    abstract  public BaseUnitView generateView(Context context);
+    abstract  public boolean notifyNewInfo(Context context, BaseUnitInfo newInfo);
 }
