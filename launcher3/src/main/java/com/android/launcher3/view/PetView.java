@@ -2,15 +2,14 @@ package com.android.launcher3.view;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
-import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.util.AttributeSet;
 
 import com.android.launcher3.Alarm;
 import com.android.launcher3.OnAlarmListener;
+import com.android.launcher3.Utilities;
 import com.android.launcher3.util.Logger;
 
 import junit.framework.Assert;
@@ -18,10 +17,10 @@ import junit.framework.Assert;
 /**
  * Created by NineG on 2016/7/3.
  */
-public class PetView extends BaseUnitView implements PetInfo.OnInfoChangedObserver {
+public class PetView extends BaseUnitView implements PetInfo.PetInfoChangedObserver {
     private static final String LOG_TAG = Logger.getLogTag(PetView.class);
     protected PetAnimationInfo mPetAnimationInfo;
-
+    private boolean mPause;
     public PetView(Context context) {
         super(context);
     }
@@ -35,31 +34,6 @@ public class PetView extends BaseUnitView implements PetInfo.OnInfoChangedObserv
     }
 
     @Override
-    public void setUnitInfo(BaseUnitInfo info) {
-        clearOnInfoChangedObserver(mInfo);
-        super.setUnitInfo(info);
-
-        if (info instanceof PetInfo) {
-            PetInfo petInfo = (PetInfo) info;
-            registerInfoChangedObserver(petInfo);
-        } else {
-            Logger.d(LOG_TAG, "invalid info %s", info);
-        }
-    }
-
-    public void registerInfoChangedObserver(PetInfo petInfo) {
-        petInfo.setOnInfoChangedObserver(this);
-    }
-
-    public void clearOnInfoChangedObserver(BaseUnitInfo info) {
-        if (info instanceof PetInfo) {
-            ((PetInfo) info).clearOnInfoChangedObserver();
-        } else {
-            Logger.d(LOG_TAG, "invalid info %s", info);
-        }
-    }
-
-    @Override
     public boolean onHungry() {
         return false;
     }
@@ -68,6 +42,72 @@ public class PetView extends BaseUnitView implements PetInfo.OnInfoChangedObserv
     public boolean onEat(final FoodInfo foodInfo) {
         startMovement(true);
         return true;
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+
+        mPause = true;
+
+        if (mAnimateAlarm != null)
+            mAnimateAlarm.cancelAlarm();
+
+        if (mMovementAlarm != null)
+            mMovementAlarm.cancelAlarm();
+
+        if (mMovementAnimator != null) {
+            mMovementAnimator.pause();
+        }
+
+
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+
+        mPause = false;
+        if (mPetAnimationInfo != null && mPetAnimationInfo.isReady()) {
+            PetAnimationInfo.InfoSet set = mPetAnimationInfo.getCurrentSet();
+            int durationRange = Math.max((int)set.duration, 50);
+            scheduleNextInvalidate(Utilities.nextRandomInt(durationRange));
+        }
+
+        if (mMovementAnimator != null) {
+            if (mMovementAnimator.isPaused())
+                mMovementAnimator.resume();
+            else
+                mMovementAnimator.start();
+        } else {
+            final PetInfo petInfo = (PetInfo) mInfo;
+            final PetInfo.Movement curMovement = petInfo.getCurrentMovement(getContext());
+            int durationRange = Math.max((int) curMovement.getStayTime(), 50);
+            scheduleNextMovement(Utilities.nextRandomInt(durationRange));
+        }
+    }
+
+    @Override
+    public void onDragStart() {
+        super.onDragStart();
+        mPause = true;
+    }
+
+    @Override
+    public void onDragEnd() {
+        super.onDragEnd();
+
+        mPause = false;
+
+        final PetInfo petInfo = (PetInfo) mInfo;
+        PetInfo.Movement curMovement = petInfo.refreshMovement(getContext());
+        if (mMovementAnimator != null) {
+            mMovementAnimator.cancel();
+            mMovementAnimator = curMovement.getMoveAnimator(this);
+            addMovementAnimatorListener(curMovement);
+        }
+
+        invalidate();
     }
 
     @Override
@@ -99,7 +139,7 @@ public class PetView extends BaseUnitView implements PetInfo.OnInfoChangedObserv
 //        Logger.d(LOG_TAG, "dispatchDraw %s", this);
         if (mPetAnimationInfo != null && mPetAnimationInfo.isReady()) {
 //            Logger.d(LOG_TAG, "set timelapsed %s, duration", timelapsed, duration);
-            long timeToNextFrame = mPetAnimationInfo.next();
+            long timeToNextFrame = mPause ? 0 : mPetAnimationInfo.next();
             PetAnimationInfo.InfoSet set = mPetAnimationInfo.getCurrentSet();
 //            Logger.d(LOG_TAG, "set bitmap %s/%s", set.bitmap.getWidth(), set.bitmap.getHeight());
             if (mPetAnimationInfo.isHorizontalReverse()) {
@@ -226,31 +266,7 @@ public class PetView extends BaseUnitView implements PetInfo.OnInfoChangedObserv
                 invalidate();
 
             if (mMovementAnimator != null) {
-                mMovementAnimator.addListener(new AnimatorListenerAdapter() {
-                    @Override
-                    public void onAnimationStart(Animator animation) {
-                        super.onAnimationStart(animation);
-                        isLastMovementAnimatorCanceled = false;
-                    }
-
-                    @Override
-                    public void onAnimationCancel(Animator animation) {
-                        isLastMovementAnimatorCanceled = true;
-                    }
-                    @Override
-                    public void onAnimationEnd(Animator animation) {
-                        super.onAnimationEnd(animation);
-                        mMovementAnimator = null;
-                        if (!isLastMovementAnimatorCanceled) {
-                            setX(curMovement.getX());
-                            setY(curMovement.getY());
-                            scheduleNextMovement(50);
-                        }
-                        Logger.d(LOG_TAG, "mMovementAnimator end %s, %s, %s", mInfo.getX(), mInfo.getY(), isLastMovementAnimatorCanceled);
-                        //a short delay
-                    }
-                });
-
+                addMovementAnimatorListener(curMovement);
                 mMovementAnimator.start();
             } else {
                 //remain current state for a period of time.
@@ -263,5 +279,35 @@ public class PetView extends BaseUnitView implements PetInfo.OnInfoChangedObserv
                 }
             }
         }
+    }
+
+    private void addMovementAnimatorListener(final PetInfo.Movement curMovement) {
+        if (mMovementAnimator == null)
+            return;
+
+        mMovementAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationStart(Animator animation) {
+                super.onAnimationStart(animation);
+                isLastMovementAnimatorCanceled = false;
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                isLastMovementAnimatorCanceled = true;
+            }
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                super.onAnimationEnd(animation);
+                mMovementAnimator = null;
+                if (!isLastMovementAnimatorCanceled) {
+                    setX(curMovement.getTargetX());
+                    setY(curMovement.getTargetY());
+                    scheduleNextMovement(50);
+                }
+                Logger.d(LOG_TAG, "mMovementAnimator end %s, %s, %s", mInfo.getX(), mInfo.getY(), isLastMovementAnimatorCanceled);
+                //a short delay
+            }
+        });
     }
 }

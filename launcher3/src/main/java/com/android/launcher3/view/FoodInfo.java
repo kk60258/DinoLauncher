@@ -1,8 +1,9 @@
 package com.android.launcher3.view;
 
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
+
+import junit.framework.Assert;
 
 /**
  * Created by NineG on 2016/7/3.
@@ -13,18 +14,8 @@ public abstract class FoodInfo extends BaseUnitInfo {
         super(context);
     }
 
-    public interface OnInfoChangedObserver {
+    public interface FoodInfoChangedObserver extends OnInfoChangedObserver {
         boolean beEaten(PetInfo petInfo, long progress);
-    }
-
-    private OnInfoChangedObserver mOnInfoChangedObserver= null;
-
-    public void setOnInfoChangedObserver(OnInfoChangedObserver observer) {
-        mOnInfoChangedObserver = observer;
-    }
-
-    public void clearOnInfoChangedObserver() {
-        mOnInfoChangedObserver = null;
     }
 
     abstract public Drawable getFoodAsset(Context context);
@@ -39,8 +30,16 @@ public abstract class FoodInfo extends BaseUnitInfo {
         return false;
     }
 
-    public void beEaten(PetInfo petInfo, long progress) {
-        if (mOnInfoChangedObserver != null)
-            mOnInfoChangedObserver.beEaten(petInfo, progress);
+    @Override
+    public boolean notifyInfoChanged(Context context, BaseUnitInfo infoChanged) {
+        return false;
     }
+
+    public void beEaten(PetInfo petInfo, long progress) {
+        Assert.assertTrue(mInfoChangedObserver instanceof FoodInfoChangedObserver);
+        ((FoodInfoChangedObserver) mInfoChangedObserver).beEaten(petInfo, progress);
+    }
+
+    public void onPauseAction() {}
+    public void onResumeAction() {}
 }

@@ -695,7 +695,7 @@ public class DragController {
         final int count = dropTargets.size();
         for (int i=count-1; i>=0; i--) {
             DropTarget target = dropTargets.get(i);
-            if (!target.isDropEnabled())
+            if (!target.isDropEnabled(mDragObject))
                 continue;
 
             target.getHitRectRelativeToDragLayer(r);

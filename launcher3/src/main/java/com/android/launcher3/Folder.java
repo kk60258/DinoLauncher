@@ -952,7 +952,7 @@ public class Folder extends LinearLayout implements DragSource, View.OnClickList
         }
     }
 
-    public boolean isDropEnabled() {
+    public boolean isDropEnabled(DragObject dragObject) {
         return true;
     }
 

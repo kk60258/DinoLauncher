@@ -1388,15 +1388,6 @@ public class Launcher extends Activity
             mHotseat.setOnLongClickListener(this);
         }
 
-        mParkViewHost = (ParkViewHost) findViewById(R.id.parkviewhost);
-        if (mParkViewHost != null) {
-            mUnitManager = new UnitManager();
-            mParkViewHost.setUnitManager(mUnitManager);
-            if (mHotseat != null) {
-                mParkViewHost.setHotseatHeight(mHotseat.getLayoutParams().height);
-            }
-        }
-
         mOverviewPanel = (ViewGroup) findViewById(R.id.overview_panel);
         View widgetButton = findViewById(R.id.widget_button);
         widgetButton.setOnClickListener(new OnClickListener() {
@@ -1443,11 +1434,17 @@ public class Launcher extends Activity
         mWorkspace.setup(dragController);
         dragController.addDragListener(mWorkspace);
 
+        mParkViewHost = (ParkViewHost) findViewById(R.id.parkviewhost);
         //setup ParkViewHost
         if (mParkViewHost != null) {
+            mUnitManager = new UnitManager();
+            mParkViewHost.setUnitManager(mUnitManager);
+            if (mHotseat != null) {
+                mParkViewHost.setHotseatHeight(mHotseat.getLayoutParams().height);
+            }
             mParkViewHost.setHapticFeedbackEnabled(false);
             mParkViewHost.setCustomizedOnLongClickListener(this);
-            mParkViewHost.setup(dragController);
+            mParkViewHost.setup(this, dragController);
             dragController.addDragListener(mParkViewHost);
         }
 
@@ -3206,6 +3203,8 @@ public class Launcher extends Activity
             longClickCellInfo = new CellLayout.CellInfo(v, info);;
             itemUnderLongClick = longClickCellInfo.cell;
             resetAddInfo();
+        } else if (v instanceof BaseUnitView) {
+            itemUnderLongClick = v;
         }
 
         // The hotseat touch handling does not go through Workspace, and we always allow long press
@@ -3223,13 +3222,21 @@ public class Launcher extends Activity
                     mWorkspace.enterOverviewMode();
                 }
             } else {
-                final boolean isAllAppsButton = inHotseat && isAllAppsButtonRank(
-                        mHotseat.getOrderInHotseat(
-                                longClickCellInfo.cellX,
-                                longClickCellInfo.cellY));
-                if (!(itemUnderLongClick instanceof Folder || isAllAppsButton)) {
-                    // User long pressed on an item
-                    mWorkspace.startDrag(longClickCellInfo);
+                if (longClickCellInfo != null) {
+                    final boolean isAllAppsButton = inHotseat && isAllAppsButtonRank(
+                            mHotseat.getOrderInHotseat(
+                                    longClickCellInfo.cellX,
+                                    longClickCellInfo.cellY));
+                    if (!(itemUnderLongClick instanceof Folder || isAllAppsButton)) {
+                        // User long pressed on an item
+                        mWorkspace.startDrag(longClickCellInfo);
+                    }
+                } else if (itemUnderLongClick instanceof BaseUnitView) {
+                    if (mParkViewHost != null) {
+                        mParkViewHost.startDrag((BaseUnitView) itemUnderLongClick);
+                    }
+                } else {
+                    Logger.d(LOG_TAG, "no long click info");
                 }
             }
         }

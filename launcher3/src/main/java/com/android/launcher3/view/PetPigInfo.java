@@ -124,13 +124,21 @@ public class PetPigInfo extends PetInfo {
         int targetX = randomNumber(rangeX[0], rangeX[1]);
         int targetY = randomNumber(rangeY[0], rangeY[1]);
 
-        return getMoveMovement(context, targetX, targetY);
+        return getMoveMovement(context, this.getX(), this.getY(), targetX, targetY);
     }
 
-    protected Movement getMoveMovement(Context context, float targetX, float targetY) {
-        boolean reverseHorizontal = targetX > getX() ? true : false;
+    protected Movement getMoveMovement(Context context, float startX, float startY, float targetX, float targetY) {
+        float moveCenterX = mSizeMap.get(State.Move).width / 2f;
+        float moveCenterY = mSizeMap.get(State.Move).height / 2f;
+
+        targetX -= moveCenterX;
+        targetY -= moveCenterY;
+
+
+        boolean reverseHorizontal = targetX > (getX() + moveCenterX)? true : false;
         PetAnimationInfo selfAnimationInfo = getPetAnimationInfo(context, State.Move);
         selfAnimationInfo.setHorizontalReverse(reverseHorizontal);
+
 
         LauncherAnimatorHelper moveAnimator = LauncherAnimUtils.ofLauncherAnimatorHelperPropertyValuesHolder(null, PropertyValuesHolder.ofFloat("x", targetX), PropertyValuesHolder.ofFloat("y", targetY));
         moveAnimator.getAnimator().setInterpolator(new LinearInterpolator());
@@ -138,13 +146,15 @@ public class PetPigInfo extends PetInfo {
         long duration = calculateMoveDuration(targetX, targetY);
         moveAnimator.getAnimator().setDuration(duration);
 
-        Movement result = new Movement(State.Move, targetX, targetY, (int) duration, selfAnimationInfo, moveAnimator);
+        Movement result = new Movement(State.Move, startX, startY, targetX, targetY, (int) duration, selfAnimationInfo, moveAnimator);
         return result;
     }
 
     @Override
     protected Movement getEatMovement(Context context, FoodInfo info) {
-        Movement move = getMoveMovement(context, info.getX(), info.getY());
+        float targetX = info.getX() + info.getCurrentWidth() / 2;
+        float targetY = info.getY() + info.getCurrentHeight() / 2;
+        Movement move = getMoveMovement(context, this.getX(), this.getY(), targetX, targetY);
 
         PetAnimationInfo selfAnimationInfo = getPetAnimationInfo(context, State.Eat);
         Movement eat = new Movement(State.Eat, getEatMovementDuration(info), selfAnimationInfo);
@@ -158,19 +168,7 @@ public class PetPigInfo extends PetInfo {
     private int mTotalMovementWeight;
 
     private Movement getRandomMovement(Context context) {
-        Movement movement = getRandomMovementByWeight();
-        Movement result = null;
-        switch (movement.state) {
-            case Idle:
-                result = new Movement(State.Idle, randomIdleStaytime(), getPetAnimationInfo(context, State.Idle));
-                break;
-            case Move:
-                result = getMoveMovement(context);
-                break;
-            case Sleep:
-                result = new Movement(State.Sleep, randomSleepStaytime(), getPetAnimationInfo(context, State.Sleep));
-                break;
-        }
+        Movement result = getMovementInner(context, null);
         Logger.d(LOG_TAG, "getRandomMovement %s", result.state);
         return result;
     }
@@ -242,6 +240,38 @@ public class PetPigInfo extends PetInfo {
         for (Movement movement : mMovementList) {
             mTotalMovementWeight += movement.weight;
         }
+    }
+
+    @Override
+    Movement refreshMovement(Context context) {
+        return getMovementInner(context,  getCurrentMovement(context));
+    }
+
+    private Movement getMovementInner(Context context, Movement movement) {
+        boolean random = false;
+        if (movement == null) {
+            movement = getRandomMovementByWeight();
+            random = true;
+        }
+
+        Movement result = null;
+        switch (movement.state) {
+            case Idle:
+                result = new Movement(State.Idle, randomIdleStaytime(), getPetAnimationInfo(context, State.Idle));
+                break;
+            case Move:
+                result = random ? getMoveMovement(context) : getMoveMovement(context, movement.getStartX(), movement.getStartY(), movement.getTargetX(), movement.getTargetY());
+                break;
+            case Sleep:
+                result = new Movement(State.Sleep, randomSleepStaytime(), getPetAnimationInfo(context, State.Sleep));
+                break;
+        }
+
+        if (!random)
+            result.nextMovement = movement.nextMovement;
+        
+        setCurMovement(result);
+        return result;
     }
 }
 

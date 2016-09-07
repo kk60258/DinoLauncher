@@ -109,7 +109,7 @@ public interface DropTarget {
      *
      * @return boolean specifying whether this drop target is currently enabled
      */
-    boolean isDropEnabled();
+    boolean isDropEnabled(DragObject dragObject);
 
     /**
      * Handle an object being dropped on the DropTarget

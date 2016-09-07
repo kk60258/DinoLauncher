@@ -16,9 +16,12 @@ import android.view.animation.Interpolator;
 
 import com.android.launcher3.DragController;
 import com.android.launcher3.DragSource;
+import com.android.launcher3.DragView;
 import com.android.launcher3.DropTarget;
 import com.android.launcher3.Insettable;
+import com.android.launcher3.Launcher;
 import com.android.launcher3.LauncherAnimUtils;
+import com.android.launcher3.R;
 import com.android.launcher3.util.Logger;
 
 import java.util.Random;
@@ -30,8 +33,11 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         DragController.DragListener, ViewGroup.OnHierarchyChangeListener, Insettable {
     private static final String LOG_TAG = Logger.getLogTag(ParkViewHost.class);
 
+    private UnitManager mUnitManager;
     protected final Rect mInsets = new Rect();
     private DragController mDragController;
+    private Launcher mLauncher;
+    private BaseUnitViewDragHelper mDragHelper;
 
     public ParkViewHost(Context context) {
         this(context, null);
@@ -214,7 +220,10 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
      */
     @Override
     public void onDragStart(DragSource source, Object info, int dragAction) {
-
+        if (source == this && info instanceof BaseUnitInfo) {
+            mDragController.addDropTarget(this);
+        }
+        mUnitManager.notifyPauseByDragged();
     }
 
     /**
@@ -222,7 +231,8 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
      */
     @Override
     public void onDragEnd() {
-
+        mDragController.removeDropTarget(this);
+        mUnitManager.notifyResumeByDragged();
     }
 
     /**
@@ -285,7 +295,9 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
      * @return boolean specifying whether this drop target is currently enabled
      */
     @Override
-    public boolean isDropEnabled() {
+    public boolean isDropEnabled(DragObject dragObject) {
+        if (dragObject != null && dragObject.dragInfo instanceof BaseUnitInfo)
+            return true;
         return false;
     }
 
@@ -296,7 +308,16 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
      */
     @Override
     public void onDrop(DragObject dragObject) {
+        if (dragObject == null || !(dragObject.dragInfo instanceof BaseUnitInfo))
+            return;
+        dragObject.deferDragViewCleanupPostAnimation = false;
+        BaseUnitInfo unitInfo = (BaseUnitInfo) dragObject.dragInfo;
 
+        float[] coord = getDragViewLoc(dragObject.x, dragObject.y, dragObject.xOffset, dragObject.yOffset, null);
+        unitInfo.setX(coord[0]);
+        unitInfo.setY(coord[1]);
+        unitInfo.onDragEnd();
+        mUnitManager.notifyInfoChanged(getContext(), unitInfo);
     }
 
     @Override
@@ -337,17 +358,18 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
      */
     @Override
     public boolean acceptDrop(DragObject dragObject) {
-        return false;
+        return isDropEnabled(dragObject);
     }
 
     @Override
     public void getHitRectRelativeToDragLayer(Rect outRect) {
-
+        super.getHitRect(outRect);
+//        mLauncher.getDragLayer().getDescendantRectRelativeToSelf(this, outRect);
     }
 
     @Override
     public void getLocationInDragLayer(int[] loc) {
-
+//        mLauncher.getDragLayer().getLocationInDragLayer(this, loc);
     }
 
     @Override
@@ -405,8 +427,10 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         return false;
     }
 
-    public void setup(DragController dragController) {
+    public void setup(Launcher launcher, DragController dragController) {
+        mLauncher = launcher;
         mDragController = dragController;
+        mDragHelper = new BaseUnitViewDragHelper(mLauncher, mDragController, this);
     }
 
     private OnLongClickListener mOnLongClickListener = null;
@@ -428,6 +452,7 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         params.setY(y);
         child.setLayoutParams(params);
         child.setUnitInfo(info);
+        child.setTag(info);
         child.setOnLongClickListener(mOnLongClickListener);
         addView(child);
         return true;
@@ -445,6 +470,7 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         params.setY(y - info.getCurrentHeight());
         child.setLayoutParams(params);
         child.setUnitInfo(info);
+        child.setTag(info);
         child.setOnLongClickListener(mOnLongClickListener);
         child.setPivotX(0.5f*info.getCurrentWidth());
         child.setPivotY(0.5f*info.getCurrentHeight());
@@ -541,7 +567,6 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         return result;
     }
 
-    private UnitManager mUnitManager;
     public void setUnitManager(UnitManager unitManager) {
         mUnitManager = unitManager;
     }
@@ -579,5 +604,39 @@ public class ParkViewHost extends ViewGroup implements DropTarget, DragSource, V
         result[0] = 0;
         result[1] = getMeasuredHeight() - mHotseatHeight;
         return result;
+    }
+
+
+    public void startDrag(BaseUnitView child) {
+        mDragHelper.startDrag(child);
+    }
+
+    // This is used to compute the visual x,y of the dragView. This point is then
+    // used to visualize drop locations and determine where to drop an item.
+    //This is modified from Worksapce.java
+    private float[] getDragViewLoc(int x, int y, int xOffset, int yOffset, float[] recycle) {
+        float res[];
+        if (recycle == null) {
+            res = new float[2];
+        } else {
+            res = recycle;
+        }
+
+        // First off, the drag view has been shifted in a way that is not represented in the
+        // x and y values or the x/yOffsets. Here we account for that shift.
+        x += getResources().getDimensionPixelSize(R.dimen.dragViewOffsetX);
+        y += getResources().getDimensionPixelSize(R.dimen.dragViewOffsetY);
+
+        // These represent the visual top and left of drag view if a dragRect was provided.
+        // If a dragRect was not provided, then they correspond to the actual view left and
+        // top, as the dragRect is in that case taken to be the entire dragView.
+        // R.dimen.dragViewOffsetY.
+        int left = x - xOffset;
+        int top = y - yOffset;
+
+        res[0] = left;
+        res[1] = top;
+
+        return res;
     }
 }

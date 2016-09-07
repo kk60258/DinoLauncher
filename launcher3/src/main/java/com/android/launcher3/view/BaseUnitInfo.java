@@ -1,12 +1,11 @@
 package com.android.launcher3.view;
 
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 
-import com.android.photos.BitmapRegionTileSource;
+import junit.framework.Assert;
 
 import java.util.HashMap;
 import java.util.UUID;
@@ -95,8 +94,46 @@ public abstract class BaseUnitInfo {
         return super.equals(o);
     }
 
+    public interface OnInfoChangedObserver {
+        void onPause();
+        void onResume();
+        void onDragStart();
+        void onDragEnd();
+    }
+
+    protected OnInfoChangedObserver mInfoChangedObserver= null;
+
+    public void setInfoChangedObserver(OnInfoChangedObserver observer) {
+        mInfoChangedObserver = observer;
+    }
+
+    public void clearOnInfoChangedObserver() {
+        mInfoChangedObserver = null;
+    }
+
+    public void onDragStart() {
+        Assert.assertNotNull(mInfoChangedObserver);
+        mInfoChangedObserver.onDragStart();
+    }
+
+    public void onDragEnd() {
+        Assert.assertNotNull(mInfoChangedObserver);
+        mInfoChangedObserver.onDragEnd();
+    }
+
+    public void onPauseAction() {
+        Assert.assertNotNull(mInfoChangedObserver);
+        mInfoChangedObserver.onPause();
+    }
+
+    public void onResumeAction() {
+        Assert.assertNotNull(mInfoChangedObserver);
+        mInfoChangedObserver.onResume();
+    }
+
     abstract  protected void initSize(Context context);
     abstract  protected void onStateChanged(State oldState, State newState);
     abstract  public BaseUnitView generateView(Context context);
     abstract  public boolean notifyNewInfo(Context context, BaseUnitInfo newInfo);
+    abstract  public boolean notifyInfoChanged(Context context, BaseUnitInfo infoChanged);
 }

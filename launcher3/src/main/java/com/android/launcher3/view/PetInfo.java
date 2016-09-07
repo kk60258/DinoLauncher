@@ -2,9 +2,7 @@ package com.android.launcher3.view;
 
 import android.animation.Animator;
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.view.View;
-import android.view.animation.AnimationSet;
 
 import com.android.launcher3.FirstFrameAnimatorHelper;
 import com.android.launcher3.LauncherAnimatorHelper;
@@ -12,8 +10,6 @@ import com.android.launcher3.Utilities;
 import com.android.launcher3.util.Logger;
 
 import junit.framework.Assert;
-
-import java.util.List;
 
 /**
  * Created by NineG on 2016/7/3.
@@ -26,33 +22,22 @@ public abstract class PetInfo extends BaseUnitInfo {
         super(context);
     }
 
-    public interface OnInfoChangedObserver {
+    public interface PetInfoChangedObserver extends OnInfoChangedObserver {
         boolean onHungry();
         boolean onEat(FoodInfo foodInfo);
         int[] getMoveRangeX();
         int[] getMoveRangeY();
     }
 
-    private OnInfoChangedObserver mOnInfoChangedObserver= null;
-
-    public void setOnInfoChangedObserver(OnInfoChangedObserver observer) {
-        mOnInfoChangedObserver = observer;
-    }
-
-    public void clearOnInfoChangedObserver() {
-        mOnInfoChangedObserver = null;
-    }
 
     protected int[] getMoveRangeX() {
-        if (mOnInfoChangedObserver == null)
-            return null;
-        return mOnInfoChangedObserver.getMoveRangeX();
+        Assert.assertTrue(mInfoChangedObserver instanceof PetInfoChangedObserver);
+        return ((PetInfoChangedObserver) mInfoChangedObserver).getMoveRangeX();
     }
 
     protected int[] getMoveRangeY() {
-        if (mOnInfoChangedObserver == null)
-            return null;
-        return mOnInfoChangedObserver.getMoveRangeY();
+        Assert.assertTrue(mInfoChangedObserver instanceof PetInfoChangedObserver);
+        return ((PetInfoChangedObserver) mInfoChangedObserver).getMoveRangeY();
     }
 
     boolean hungry(FoodInfo foodInfo, PetInfo petInfo) {
@@ -61,7 +46,7 @@ public abstract class PetInfo extends BaseUnitInfo {
 
     boolean eat(Context context, FoodInfo foodInfo) {
         //playAnimation
-        Assert.assertNotNull(mOnInfoChangedObserver);
+        Assert.assertTrue(mInfoChangedObserver instanceof PetInfoChangedObserver);
         boolean result = false;
         if (mFoodInfoToBeEaten != null && foodInfo != null) {
             Double d1 = Utilities.sqareDistance(mFoodInfoToBeEaten.getX(), mFoodInfoToBeEaten.getY(), getX(), getY());
@@ -77,7 +62,7 @@ public abstract class PetInfo extends BaseUnitInfo {
 
         if (result) {
             setCurMovement(getEatMovement(context, foodInfo));
-            mOnInfoChangedObserver.onEat(foodInfo);
+            ((PetInfoChangedObserver) mInfoChangedObserver).onEat(foodInfo);
         }
 
         return result;
@@ -112,6 +97,15 @@ public abstract class PetInfo extends BaseUnitInfo {
         return false;
     }
 
+    @Override
+    public boolean notifyInfoChanged(Context context, BaseUnitInfo infoChanged) {
+        if (infoChanged.equals(mFoodInfoToBeEaten)) {
+            mFoodInfoToBeEaten = null;
+            return eat(context, (FoodInfo) infoChanged);
+        }
+        return false;
+    }
+
     protected Movement mCurMovement = null;
 
     Movement getCurrentMovement(Context context) {
@@ -122,7 +116,8 @@ public abstract class PetInfo extends BaseUnitInfo {
 
     class Movement {
         State state;
-        float x, y;
+        float startX, startY;
+        float targetX, targetY;
         int weight;
         long stayTime;
         LauncherAnimatorHelper launcherAnimatorHelper;
@@ -141,29 +136,33 @@ public abstract class PetInfo extends BaseUnitInfo {
             this.weight = weight;
         }
 
-        Movement(State state, float nextX, float nextY, int stayTime, PetAnimationInfo selfAnimation, LauncherAnimatorHelper moveAnimator) {
+        Movement(State state, float startX, float startY, float nextX, float nextY, int stayTime, PetAnimationInfo selfAnimation, LauncherAnimatorHelper moveAnimator) {
             this.state = state;
-            this.x = nextX;
-            this.y = nextY;
+            this.startX = startX;
+            this.startY = startY;
+            this.targetX = nextX;
+            this.targetY = nextY;
+
             this.stayTime = stayTime;
             this.selfAnimation = selfAnimation;
             this.launcherAnimatorHelper = moveAnimator;
         }
 
-        public void setX(int x) {
-            this.x = x;
+        public float getStartX() {
+            return startX;
         }
 
-        public float getX() {
-            return x;
+
+        public float getStartY() {
+            return startY;
         }
 
-        public void setY(int y) {
-            this.y = y;
+        public float getTargetX() {
+            return targetX;
         }
 
-        public float getY() {
-            return y;
+        public float getTargetY() {
+            return targetY;
         }
 
         public Animator getMoveAnimator(View targetView) {
@@ -223,9 +222,13 @@ public abstract class PetInfo extends BaseUnitInfo {
     }
 
 
-    private void setCurMovement(Movement newMovement) {
+    protected void setCurMovement(Movement newMovement) {
         mCurMovement = newMovement;
-        mCurrentState = mCurMovement.state;
+        setState(mCurMovement.state);
         mLastMovementTime = System.currentTimeMillis();
+    }
+
+    Movement refreshMovement(Context context) {
+        return getCurrentMovement(context);
     }
 }

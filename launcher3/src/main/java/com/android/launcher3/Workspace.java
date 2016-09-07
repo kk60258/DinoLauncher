@@ -73,6 +73,8 @@ import com.android.launcher3.compat.PackageInstallerCompat;
 import com.android.launcher3.compat.PackageInstallerCompat.PackageInstallInfo;
 import com.android.launcher3.compat.UserHandleCompat;
 import com.android.launcher3.util.Logger;
+import com.android.launcher3.view.BaseUnitInfo;
+import com.android.launcher3.view.ParkViewHost;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -4544,7 +4546,9 @@ public class Workspace extends SmoothPagedView
         // Do nothing
     }
 
-    public boolean isDropEnabled() {
+    public boolean isDropEnabled(DragObject dragObject) {
+        if (dragObject != null && dragObject.dragInfo instanceof BaseUnitInfo)
+            return false;
         return true;
     }
 

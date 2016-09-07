@@ -101,7 +101,7 @@ public class ButtonDropTarget extends TextView implements DropTarget, DragContro
         // Do nothing
     }
 
-    public boolean isDropEnabled() {
+    public boolean isDropEnabled(DragObject dragObject) {
         return mActive;
     }
 

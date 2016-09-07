@@ -82,4 +82,29 @@ public class UnitManager {
             }
         }
     }
+
+    public void notifyInfoChanged(Context context, BaseUnitInfo infoChanged) {
+        Logger.d(LOG_TAG, "notifyInfoChanged %s", infoChanged);
+        for(BaseUnitInfo info : mBaseInfos.values()) {
+            if (info.equals(infoChanged))
+                continue;
+            if (info.notifyInfoChanged(context, infoChanged)) {
+                Logger.d(LOG_TAG, "%s handle change %s", info, infoChanged);
+            }
+        }
+    }
+
+    public void notifyPauseByDragged() {
+        Logger.d(LOG_TAG, "notifyPauseByDragged");
+        for(BaseUnitInfo info : mBaseInfos.values()) {
+            info.onPauseAction();
+        }
+    }
+
+    public void notifyResumeByDragged() {
+        Logger.d(LOG_TAG, "notifyResumeByDragged");
+        for(BaseUnitInfo info : mBaseInfos.values()) {
+            info.onResumeAction();
+        }
+    }
 }

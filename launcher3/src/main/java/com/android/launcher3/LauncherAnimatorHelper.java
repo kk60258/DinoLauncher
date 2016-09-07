@@ -5,6 +5,8 @@ import android.animation.ObjectAnimator;
 
 /**
  * Created by NineG on 2016/7/9.
+ *
+ * Help to access FirstFrameAnimatorHelper in order to setTarget(View) after creation.
  */
 public class LauncherAnimatorHelper {
     private Animator mAnimator;

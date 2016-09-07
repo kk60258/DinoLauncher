@@ -51,6 +51,7 @@ import android.view.View;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.Random;
 
 /**
  * Various utilities shared amongst the Launcher's classes.
@@ -556,5 +557,11 @@ public final class Utilities {
 
     public static float distance(float targetX, float targetY, float baseX, float baseY) {
         return (float) Math.sqrt(Math.pow(targetX - baseX, 2) + Math.pow(targetY - baseY, 2));
+    }
+
+    static Random sRandom = new Random();
+
+    public static int nextRandomInt(int n) {
+        return sRandom.nextInt(n);
     }
 }
